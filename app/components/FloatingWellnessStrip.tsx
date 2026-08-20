@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, useAnimationControls } from "framer-motion";
 import { Activity, HeartPulse, ShieldCheck, Sparkles } from "lucide-react";
 
 const stripItems = [
@@ -22,21 +22,22 @@ const stripItems = [
   },
   {
     id: 4,
-    text: "CLINICAL GRADE &bull; 20 BILLION CFU ACTIVE STRAINS*",
+    text: "CLINICAL GRADE • 20 BILLION CFU ACTIVE STRAINS*",
     icon: Sparkles,
   },
 ];
 
 export default function InfiniteWellnessStrip() {
-  const [duration, setDuration] = useState(25);
+  const [duration, setDuration] = useState(55);
+  const controls = useAnimationControls();
 
-  // Dynamically set slower speed (higher duration) for mobile screens
+  // Dynamically set slow, premium speeds for mobile and desktop screens
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
-        setDuration(45); // Slower, calmer speed on mobile
+        setDuration(80); // Ultra-smooth, calm speed on mobile
       } else {
-        setDuration(25); // Standard smooth speed on desktop
+        setDuration(55); // Luxurious, slow pace on desktop
       }
     };
 
@@ -45,25 +46,51 @@ export default function InfiniteWellnessStrip() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Start initial continuous marquee animation on mount
+  useEffect(() => {
+    controls.start({
+      x: "-50%",
+      transition: {
+        duration: duration,
+        repeat: Infinity,
+        ease: "linear",
+      },
+    });
+  }, [controls, duration]);
+
+  const handleMouseEnter = () => {
+    controls.stop(); // Instantly freezes animation in place
+  };
+
+  const handleMouseLeave = () => {
+    controls.start({
+      x: "-50%",
+      transition: {
+        duration: duration,
+        repeat: Infinity,
+        ease: "linear",
+      },
+    });
+  };
+
   return (
-    <div className="relative w-full bg-[#1C3119] text-white py-3.5 sm:py-4 overflow-hidden border-y border-[#2D5A1E]/40 shadow-xl font-sans">
-      
+    <div 
+      className="relative w-full bg-[#1C3119] text-white py-3.5 sm:py-4 overflow-hidden border-y border-[#2D5A1E]/40 shadow-xl font-sans cursor-pointer"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleMouseEnter}
+      onTouchEnd={handleMouseLeave}
+    >
       {/* Infinite Marquee Container */}
       <div className="flex w-full overflow-hidden whitespace-nowrap select-none">
         
         {/* Animated Marquee Track */}
         <motion.div
-          key={duration}
+          animate={controls}
           initial={{ x: 0 }}
-          animate={{ x: "-50%" }}
-          transition={{
-            duration: duration,
-            repeat: Infinity,
-            ease: "linear",
-          }}
           className="flex items-center space-x-8 sm:space-x-16 shrink-0 min-w-full"
         >
-          {/* Render list items duplicated for a continuous seamless loop */}
+          {/* Render list items quadrupled to maintain a seamless endless loop */}
           {[...stripItems, ...stripItems, ...stripItems, ...stripItems].map((item, index) => {
             const IconComponent = item.icon;
             return (
@@ -75,7 +102,7 @@ export default function InfiniteWellnessStrip() {
                   <IconComponent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
                 <span>{item.text}</span>
-                <span className="text-[#8CC63F]/60 ml-6 sm:ml-8">&bull;</span>
+                <span className="text-[#8CC63F]/60 ml-6 sm:ml-8">•</span>
               </div>
             );
           })}

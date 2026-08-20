@@ -34,11 +34,11 @@ export default function GoalsVisionMission() {
   };
 
   return (
-    <section className="relative py-20 sm:py-24 lg:py-32 bg-[#FAFAF7] overflow-hidden border-t border-b border-[#2D5A1E]/10">
+    <section className="relative py-16 sm:py-20 lg:py-24 bg-[#FAFAF7] overflow-hidden border-t border-b border-[#2D5A1E]/10">
       
       {/* Background Atmosphere Glow */}
       <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center">
-        <div className="w-[800px] h-[800px] bg-[#8CC63F]/[0.06] rounded-full blur-[140px]" />
+        <div className="w-[800px] h-[800px] bg-[#8CC63F]/[0.05] rounded-full blur-[140px]" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
@@ -47,26 +47,26 @@ export default function GoalsVisionMission() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
           
           {/* Left Side: EnergyMax Group Details & Interactive Accordion Cards */}
-          <div className="lg:col-span-6 flex flex-col space-y-8 text-left">
+          <div className="lg:col-span-6 flex flex-col space-y-6 text-left">
             
             {/* Header Tag */}
             <div className="space-y-3">
               <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white border border-[#2D5A1E]/20 shadow-sm">
                 <Sparkles className="w-3.5 h-3.5 text-[#639E1F]" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#2D5A1E]">
-                  EnergyMax Group 
+                  EnergyMax Group
                 </span>
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-light tracking-tight text-[#172B15] leading-[1.15]">
                 Our Goals, <span className="font-serif italic text-[#639E1F]">Vision</span> & Mission
               </h2>
-              <p className="text-xs sm:text-sm text-neutral-600 font-normal leading-relaxed pt-2">
+              <p className="text-xs sm:text-sm text-neutral-600 font-normal leading-relaxed pt-1">
                 Rooted in biological science and organic purity, EnergyMax Group delivers clinical-grade probiotics engineered to serve as your foundation for lifelong health and vitality.
               </p>
             </div>
 
             {/* Interactive Expandable Cards (Three Cards with Plus/Minus) */}
-            <div className="space-y-4 w-full">
+            <div className="space-y-3.5 w-full">
               {pillars.map((pillar) => { 
                 const isOpen = openId === pillar.id;
                 return (
@@ -78,9 +78,10 @@ export default function GoalsVisionMission() {
                         : "border-[#2D5A1E]/15 hover:border-[#639E1F]/40 shadow-sm"
                     }`}
                   >
-                    <button suppressHydrationWarning
+                    <button
+                      suppressHydrationWarning
                       onClick={() => toggleAccordion(pillar.id)}
-                      className="w-full px-6 py-5 flex items-center justify-between text-left focus:outline-none group"
+                      className="w-full px-6 py-4.5 flex items-center justify-between text-left focus:outline-none group cursor-pointer"
                     >
                       <div className="space-y-1">
                         <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
@@ -91,10 +92,10 @@ export default function GoalsVisionMission() {
                         </h3>
                       </div>
                       
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 ${
+                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all shrink-0 ${
                         isOpen ? "bg-[#2D5A1E] text-white" : "bg-[#8CC63F]/10 text-[#2D5A1E]"
                       }`}>
-                        {isOpen ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        {isOpen ? <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                       </div>
                     </button>
 
@@ -106,7 +107,7 @@ export default function GoalsVisionMission() {
                           exit={{ opacity: 0, height: 0 }}
                           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                         >
-                          <div className="px-6 pb-6 pt-1 text-xs sm:text-sm text-neutral-600 font-normal leading-relaxed border-t border-neutral-100">
+                          <div className="px-6 pb-5 pt-1 text-xs sm:text-sm text-neutral-600 font-normal leading-relaxed border-t border-neutral-100">
                             {pillar.description}
                           </div>
                         </motion.div>
@@ -119,25 +120,26 @@ export default function GoalsVisionMission() {
 
           </div>
 
-          {/* Right Side: Beautifully Presented overview.png Image Showcase */}
+          {/* Right Side: Perfectly Framed overview2.png Image Showcase */}
           <div className="lg:col-span-6 flex items-center justify-center">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="relative w-full max-w-[440px] sm:max-w-[500px] h-[500px] sm:h-[580px] flex items-center justify-center group"
+              className="relative w-full max-w-[420px] sm:max-w-[480px] h-[520px] sm:h-[600px] flex items-center justify-center group"
             >
               {/* Luminous Ambient Glow */}
-              <div className="absolute inset-0 bg-[#8CC63F]/25 rounded-full blur-[90px] -z-10" />
+              <div className="absolute inset-0 bg-[#8CC63F]/20 rounded-full blur-[100px] -z-10" />
 
               {/* Framed Visual Presentation */}
               <div className="relative w-full h-full rounded-3xl overflow-hidden border border-[#2D5A1E]/20 shadow-2xl shadow-[#2D5A1E]/15 bg-white">
                 <Image
-                  src="/girl-image.png"
+                  src="/overview3.png"
                   alt="EnergyMax Group Product Overview"
                   fill
                   priority
+                  sizes="(max-width: 768px) 420px, 480px"
                   className="object-cover object-center transform group-hover:scale-105 transition-transform duration-700"
                 />
               </div>

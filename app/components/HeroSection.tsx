@@ -1,95 +1,100 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function LuxuryHeroBanner() {
-  const [isHovered, setIsHovered] = useState(false);
-
   return (
-    <section className="relative min-h-[85vh] sm:min-h-[90vh] flex items-center justify-center overflow-hidden bg-brand-ivory pt-8 sm:pt-12 lg:pt-0">
+    <section className="relative min-h-[80vh] lg:min-h-[85vh] flex items-center overflow-hidden bg-[#FAFAF7]">
       
-      {/* Cinematic Background Atmosphere with Mobile & Desktop Optimized Positioning */}
+      {/* Cinematic Background Atmosphere with Product Image */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <motion.div
-          initial={{ scale: 1.03 }}
-          animate={{ scale: 1.08 }}
-          transition={{ duration: 15, ease: [0.25, 1, 0.5, 1], repeat: Infinity, repeatType: "reverse" }}
+          initial={{ scale: 1.02 }}
+          animate={{ scale: 1.05 }}
+          transition={{ duration: 20, ease: [0.25, 1, 0.5, 1], repeat: Infinity, repeatType: "reverse" }}
           className="absolute inset-0 w-full h-full"
         >
           <Image
-            src="/banner1.png"
-            alt="EnergyMax Group Global Wellness"
+            src="/newbanner1.png"
+            alt="EnergyMax Group maXilin Probiotics Range"
             fill
             priority
-            className="object-cover object-[72%_center] lg:object-center"
+            sizes="100vw"
+            className="object-cover object-[center_35%] sm:object-[65%_center] lg:object-[right_center]"
           />
         </motion.div>
 
-        {/* Sophisticated Overlay: Complete removal on desktop (lg:bg-transparent), soft breathable balance on mobile */}
-        <div className="absolute inset-0 bg-white/40 sm:bg-white/20 lg:bg-transparent z-10" />
+        {/* Sophisticated Responsive Gradient Overlay - Stronger on left for text legibility, fading to right */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#172B15]/95 via-[#172B15]/80 to-black/40 lg:bg-gradient-to-r lg:from-[#172B15]/95 lg:via-[#172B15]/70 lg:to-[#172B15]/20 z-10" />
       </div>
 
-      <div className="relative z-20 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 w-full py-8 sm:py-12 flex items-center justify-center lg:justify-start">
+      {/* Main Container with Grid Structure to prevent text overlapping products */}
+      <div className="relative z-20 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 w-full py-12 sm:py-20 lg:py-24 grid grid-cols-1 lg:grid-cols-12 items-center">
         
-        {/* Perfectly Centered on Mobile / Elegantly Aligned Left on Desktop */}
-        <div className="w-full flex justify-center lg:justify-start items-center pl-0 lg:pl-16">
+        {/* Content Box: Restricted to 7 columns on desktop so it stays neatly on the left */}
+        <div className="lg:col-span-7 space-y-5 sm:space-y-6 text-white text-center lg:text-left flex flex-col items-center lg:items-start">
+          
+          {/* Badge */}
           <motion.div
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            onClick={() => setIsHovered((prev) => !prev)}
-            animate={{ y: [0, -8, 0] }}
-            transition={{ y: { duration: 6, repeat: Infinity, ease: "easeInOut" } }}
-            className="relative w-[280px] sm:w-[380px] lg:w-[460px] h-[380px] sm:h-[480px] lg:h-[540px] flex items-center justify-center cursor-pointer group my-auto"
-            style={{ perspective: 1400 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#8CC63F]/20 border border-[#8CC63F]/40 backdrop-blur-md"
           >
-            {/* Luminous Luxury Ambient Glow */}
-            <div className="absolute inset-0 bg-[#8CC63F]/40 sm:bg-[#8CC63F]/35 rounded-full blur-[70px] sm:blur-[90px] -z-10 transform scale-90" />
-
-            {/* 3D Rotating Container */}
-            <motion.div
-              animate={{ rotateY: isHovered ? 180 : 0 }}
-              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              style={{ transformStyle: "preserve-3d" }}
-              className="relative w-full h-full"
-            >
-              {/* Front Pouch View */}
-              <div 
-                style={{ backfaceVisibility: "hidden" }}
-                className="absolute inset-0 w-full h-full flex items-center justify-center"
-              >
-                <Image
-                  src="/front2.png"
-                  alt="maXilin Superprobiotics Front View"
-                  fill
-                  priority
-                  className="object-contain drop-shadow-[0_20px_30px_rgba(23,43,21,0.35)] sm:drop-shadow-[0_25px_35px_rgba(23,43,21,0.3)]"
-                />
-              </div>
-
-              {/* Back Pouch View & Specs */}
-              <div 
-                style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
-                className="absolute inset-0 w-full h-full flex items-center justify-center"
-              >
-                <Image
-                  src="/back.png"
-                  alt="maXilin Superprobiotics Specifications"
-                  fill
-                  priority
-                  className="object-contain drop-shadow-[0_20px_30px_rgba(23,43,21,0.35)] sm:drop-shadow-[0_25px_35px_rgba(23,43,21,0.3)]"
-                />
-              </div>
-            </motion.div>
-
-            {/* Concise Instruction Pill */}
-            <div className="absolute -bottom-6 sm:-bottom-4 px-4 py-1.5 rounded-full bg-white/95 border border-[#8CC63F]/40 backdrop-blur-xl shadow-lg shadow-[#2D5A1E]/10 pointer-events-none">
-              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.25em] text-[#2D5A1E]">
-                Tap to Rotate
-              </span>
-            </div>
+            <Sparkles className="w-3.5 h-3.5 text-[#8CC63F]" />
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.25em] text-[#8CC63F]">
+              Advanced Patented Probiotics
+            </span>
           </motion.div>
+
+          {/* Main Heading */}
+          <motion.h1
+            initial={{ opacity: 0, y: 25 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.1 }}
+            className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-tight text-white leading-[1.12]"
+          >
+            GUT HEALTH IS THE <br className="hidden sm:inline" />
+            <span className="font-serif italic text-[#8CC63F]">FOUNDATION OF WELLNESS</span>
+          </motion.h1>
+
+          {/* Sub Paragraph */}
+          <motion.p
+            initial={{ opacity: 0, y: 25 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            className="text-xs sm:text-sm lg:text-base text-neutral-200 font-normal leading-relaxed max-w-lg"
+          >
+            Empowering your body with maXilin Superprobiotics—engineered to restore microbial ecology, boost vitality, and support long-term metabolic health.
+          </motion.p>
+
+          {/* Action Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 25 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.3 }}
+            className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-1 w-full sm:w-auto"
+          >
+            <Link
+              href="/shop"
+              className="w-full sm:w-auto px-7 py-3 rounded-xl bg-[#8CC63F] text-[#172B15] text-xs font-bold uppercase tracking-widest hover:bg-[#7AB82A] transition-all shadow-xl shadow-[#2D5A1E]/20 inline-flex items-center justify-center space-x-2 group shrink-0"
+            >
+              <span>SHOP NOW</span>
+              <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
+            </Link>
+
+            <Link
+              href="/about"
+              className="w-full sm:w-auto px-7 py-3 rounded-xl bg-white/10 border border-white/30 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/20 backdrop-blur-md transition-all inline-flex items-center justify-center shrink-0"
+            >
+              Discover Science
+            </Link>
+          </motion.div>
+
         </div>
 
       </div>

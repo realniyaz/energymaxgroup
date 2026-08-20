@@ -4,6 +4,7 @@ import HeroSection from "./components/HeroSection";
 import LuxuryFAQSection from "./components/LuxuryFAQSection";
 import LuxuryFooter from "./components/LuxuryFooter";
 import LuxuryNavbar from "./components/Navbar";
+import ScientificOverviewSection from "./components/Overview";
 import ProductFlavorShowcase from "./components/ProductShowcase";
 
 export default function Home() {
@@ -12,6 +13,7 @@ export default function Home() {
       <LuxuryNavbar/>
       <HeroSection />
       <FloatingWellnessStrip/>
+      <ScientificOverviewSection/>
       <GoalsVisionMission/>
       <ProductFlavorShowcase/>
       <LuxuryFAQSection/>
