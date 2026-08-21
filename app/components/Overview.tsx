@@ -47,12 +47,7 @@ export default function ProfessionalOverviewSection() {
             >
               
               {/* Badge & Zoom Indicator Overlay */}
-              <div className="absolute top-5 left-5 z-20 px-3.5 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-[#2D5A1E]/20 shadow-sm flex items-center space-x-1.5">
-                <Sparkles className="w-3 h-3 text-[#639E1F]" />
-                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#2D5A1E]">
-                  Clinical Architecture
-                </span>
-              </div>
+              
 
               <div className="absolute top-5 right-5 z-20 px-3 py-1.5 rounded-full bg-[#172B15]/80 backdrop-blur-md text-white shadow-sm flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ZoomIn className="w-3.5 h-3.5 text-[#8CC63F]" />

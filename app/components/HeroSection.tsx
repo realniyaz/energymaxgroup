@@ -88,7 +88,7 @@ export default function LuxuryHeroBanner() {
             </Link>
 
             <Link
-              href="/about"
+              href="/science"
               className="w-full sm:w-auto px-7 py-3 rounded-xl bg-white/10 border border-white/30 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/20 backdrop-blur-md transition-all inline-flex items-center justify-center shrink-0"
             >
               Discover Science
