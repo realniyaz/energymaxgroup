@@ -107,7 +107,7 @@ export default function LuxuryNavbar() {
               onMouseEnter={() => setIsProductsOpen(true)}
               onMouseLeave={() => setIsProductsOpen(false)}
             >
-              <button className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors flex items-center space-x-1 focus:outline-none cursor-pointer">
+              <button suppressHydrationWarning className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors flex items-center space-x-1 focus:outline-none cursor-pointer">
                 <span>Products</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-300 ${isProductsOpen ? "rotate-180" : ""}`} />
               </button>
@@ -147,7 +147,7 @@ export default function LuxuryNavbar() {
               </AnimatePresence>
             </div>
 
-            <a href="#Shop" className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors flex items-center space-x-1">
+            <a href="/shop" className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors flex items-center space-x-1">
               <span>Shop</span>
               <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
             </a>
@@ -224,7 +224,7 @@ export default function LuxuryNavbar() {
                   ))}
                 </div>
               </div>
-              <a href="#Shop" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">Shop</a>
+              <a href="/shop" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">Shop</a>
               <a href="/science" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">Discover Science</a>
               <a href="#promotions" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">Promotions</a>
               <a href="#resources" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">Resources & Downloads</a>
