@@ -18,15 +18,11 @@ import {
   Clock,
   Copy,
   Check,
-  IndianRupee,
-  TrendingUp,
-  Percent
+  IndianRupee
 } from "lucide-react";
 import { 
   getProductByPublicId, 
-  getProducts,
   deleteProduct, 
-  getProductImages, 
   Product, 
   ProductImage 
 } from "@/lib/services/productService";
@@ -53,49 +49,25 @@ export default function ProductDetailPage() {
         setLoading(true);
         setError(null);
 
-        // 1. Fetch product record and complete inventory list for ID fallback matching
-        const [productData, catalogListRes] = await Promise.all([
-          getProductByPublicId(publicId),
-          getProducts(1, 100).catch(() => ({ items: [], total: 0, page: 1, page_size: 100 }))
-        ]);
+        // Backend eager-loads images via selectinload(Product.images)
+        const productData = await getProductByPublicId(publicId);
         
         if (!isMounted) return;
         setProduct(productData);
 
-        // Extract integer primary key across all schema representations
-        const matchedFromList = (catalogListRes.items || []).find(
-          (p: any) => p.public_id === publicId
-        );
+        const productImgs = productData.images || [];
+        setImages(productImgs);
 
-        const numericId = 
-          productData.id ?? 
-          (productData as any).pk ?? 
-          (productData as any).product_id ??
-          matchedFromList?.id ??
-          (matchedFromList as any)?.pk;
+        // Resolve default hero preview (prefer is_primary)
+        const primaryImg = 
+          productImgs.find((img) => img.is_primary)?.image_url || 
+          productImgs[0]?.image_url;
+        setSelectedImage(primaryImg || null);
 
-        // 2. Fetch associated product images using the resolved numeric product ID
-        let productImgs: ProductImage[] = productData.images || [];
-
-        if (productImgs.length === 0 && numericId) {
-          try {
-            productImgs = await getProductImages(Number(numericId));
-          } catch {
-            productImgs = [];
-          }
-        }
-
-        if (isMounted) {
-          setImages(productImgs);
-
-          // 3. Set default preview image (primary image first)
-          const primaryImg = productImgs.find((img) => img.is_primary)?.image_url || productImgs[0]?.image_url;
-          setSelectedImage(primaryImg || null);
-        }
       } catch (err: any) {
         if (isMounted) {
           console.error("Failed to load product details:", err);
-          setError("Unable to locate this product SKU in the catalog backend.");
+          setError(err.message || "Unable to locate this product SKU in the catalog backend.");
         }
       } finally {
         if (isMounted) {
@@ -118,9 +90,9 @@ export default function ProductDetailPage() {
       setDeleting(true);
       await deleteProduct(product.public_id);
       router.push("/admin/products");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete product:", err);
-      alert("Error deleting product.");
+      alert(err.message || "Error deleting product.");
       setDeleting(false);
     }
   };
@@ -181,7 +153,10 @@ export default function ProductDetailPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-[#2D5A1E]/15">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
-            <Link href="/admin/products" className="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-[#2D5A1E] transition-colors flex items-center space-x-1">
+            <Link 
+              href="/admin/products" 
+              className="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-[#2D5A1E] transition-colors flex items-center space-x-1"
+            >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Inventory</span>
             </Link>
@@ -267,7 +242,11 @@ export default function ProductDetailPage() {
                   }`}
                 >
                   {img.image_url && (
-                    <img src={img.image_url} alt={img.alt_text || "Thumbnail"} className="w-full h-full object-contain" />
+                    <img 
+                      src={img.image_url} 
+                      alt={img.alt_text || "Thumbnail"} 
+                      className="w-full h-full object-contain" 
+                    />
                   )}
                   {img.is_primary && (
                     <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-[#8CC63F]" />

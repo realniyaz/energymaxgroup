@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { 
   ArrowLeft, 
   Save, 
@@ -13,10 +12,10 @@ import {
   Tag, 
   FileText, 
   Globe, 
-  Sliders,
-  Image as ImageIcon,
-  UploadCloud,
-  Trash2,
+  Sliders, 
+  Image as ImageIcon, 
+  UploadCloud, 
+  Trash2, 
   Star,
   FolderTree,
   IndianRupee
@@ -49,22 +48,20 @@ export default function CreateProductPage() {
   const [success, setSuccess] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // Taxonomy State
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryPublicId, setSelectedCategoryPublicId] = useState<string>("");
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
 
-  // Form State with Commercial Pricing Parameters
   const [formData, setFormData] = useState<ProductPayload>({
-    subcategory_id: 0,
+    subcategory_id: 1,
     name: "",
     slug: "",
-    short_description: "Clinical-grade multi-strain broad-spectrum probiotic engineered for advanced gut restoration and immune fortification.",
-    description: "Formulated with rigorous clinical precision, this advanced formulation delivers a potent matrix across clinically researched, resilient bacterial strains designed to bypass gastric acidity and optimize microflora balance.",
+    short_description: "",
+    description: "",
     brand_name: "EnergyMax",
-    price: 2499,
-    mrp: 2999,
-    cost_price: 1200,
+    price: 0,
+    mrp: 0,
+    cost_price: 0,
     seo_title: "",
     seo_description: "",
     is_active: true,
@@ -74,24 +71,12 @@ export default function CreateProductPage() {
 
   const [draftImages, setDraftImages] = useState<DraftFileImage[]>([]);
 
-  // Cleanup object URLs on unmount to avoid memory leaks
   useEffect(() => {
-    return () => {
-      draftImages.forEach((img) => URL.revokeObjectURL(img.preview_url));
-    };
-  }, [draftImages]);
-
-  // Fetch Parent Categories on mount
-  useEffect(() => {
-    let isMounted = true;
-
     async function loadCategories() {
       try {
         setCategoriesLoading(true);
-        const res = await getCategories(1, 100);
+        const res = await getCategories(1, 100, true);
         const list = res.items || [];
-        
-        if (!isMounted) return;
         setCategories(list);
 
         if (list.length > 0) {
@@ -102,17 +87,12 @@ export default function CreateProductPage() {
       } catch (err) {
         console.error("Failed to load categories:", err);
       } finally {
-        if (isMounted) setCategoriesLoading(false);
+        setCategoriesLoading(false);
       }
     }
     loadCategories();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
-  // Fetch subcategories when parent category changes
   const loadSubcategories = async (catPublicId: string) => {
     try {
       setSubcategoriesLoading(true);
@@ -120,32 +100,34 @@ export default function CreateProductPage() {
       setSubcategories(subs || []);
 
       if (subs && subs.length > 0) {
-        const firstSubId = subs[0].id || subs[0].category_id || 1;
+        const fallbackId = Number(subs[0].id ?? (subs[0] as any).category_id ?? 1);
         setFormData((prev) => ({
           ...prev,
-          subcategory_id: Number(firstSubId),
+          subcategory_id: fallbackId > 0 ? fallbackId : 1,
         }));
       } else {
-        setFormData((prev) => ({ ...prev, subcategory_id: 0 }));
+        setFormData((prev) => ({ ...prev, subcategory_id: 1 }));
       }
     } catch (err) {
       console.error("Failed to load subcategories:", err);
       setSubcategories([]);
+      setFormData((prev) => ({ ...prev, subcategory_id: 1 }));
     } finally {
       setSubcategoriesLoading(false);
     }
   };
 
-  const handleCategoryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const publicId = e.target.value;
-    setSelectedCategoryPublicId(publicId);
-    await loadSubcategories(publicId);
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const pubId = e.target.value;
+    setSelectedCategoryPublicId(pubId);
+    loadSubcategories(pubId);
   };
 
   const handleSubcategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = Number(e.target.value);
     setFormData((prev) => ({
       ...prev,
-      subcategory_id: Number(e.target.value),
+      subcategory_id: !isNaN(val) && val > 0 ? val : 1,
     }));
   };
 
@@ -168,7 +150,6 @@ export default function CreateProductPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    
     if (type === "checkbox") {
       const { checked } = e.target as HTMLInputElement;
       setFormData((prev) => ({ ...prev, [name]: checked }));
@@ -187,7 +168,6 @@ export default function CreateProductPage() {
 
   const handleFilesSelected = (files: FileList | File[]) => {
     const fileArray = Array.from(files);
-    
     if (draftImages.length + fileArray.length > 5) {
       alert("You can upload a maximum of 5 images per product.");
       return;
@@ -216,9 +196,6 @@ export default function CreateProductPage() {
 
   const handleRemoveImage = (index: number) => {
     setDraftImages((prev) => {
-      const removed = prev[index];
-      if (removed) URL.revokeObjectURL(removed.preview_url);
-
       const updated = prev.filter((_, i) => i !== index);
       if (updated.length > 0 && !updated.some((img) => img.is_primary)) {
         updated[0].is_primary = true;
@@ -228,74 +205,59 @@ export default function CreateProductPage() {
   };
 
   const handleSetPrimary = (index: number) => {
-    setDraftImages((prev) =>
-      prev.map((img, i) => ({
+    setDraftImages((prev) => {
+      const updated = prev.map((img, i) => ({
         ...img,
         is_primary: i === index,
-      }))
-    );
+      }));
+      return [...updated].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.subcategory_id || formData.subcategory_id <= 0) {
-      setError("Please select a valid parent category and subcategory.");
-      return;
-    }
 
     if (!formData.name.trim()) {
       setError("Product name is required.");
       return;
     }
 
+    if (!formData.price || formData.price <= 0) {
+      setError("Selling price must be greater than 0.");
+      return;
+    }
+
+    if (formData.mrp && Number(formData.price) > Number(formData.mrp)) {
+      setError("Product price cannot be greater than MRP.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    // Sanitize and normalize payload to prevent validation rejections
-    const sanitizedPayload: ProductPayload = {
-      subcategory_id: Number(formData.subcategory_id),
-      name: formData.name.trim(),
-      slug: (formData.slug || formData.name).trim().toLowerCase().replace(/[\s_-]+/g, "-"),
-      short_description: formData.short_description?.trim() || "",
-      description: formData.description?.trim() || "",
-      brand_name: formData.brand_name?.trim() || "EnergyMax",
-      price: Number(formData.price) || 0,
-      mrp: Number(formData.mrp) || 0,
-      cost_price: Number(formData.cost_price) || 0,
-      seo_title: formData.seo_title?.trim() || `${formData.name.trim()} | EnergyMax Wellness`,
-      seo_description: formData.seo_description?.trim() || "",
-      is_active: Boolean(formData.is_active),
-      is_featured: Boolean(formData.is_featured),
-      display_order: Number(formData.display_order) || 0,
-    };
-
     try {
-      // 1. Create product entity
-      const createdProduct = await createProduct(sanitizedPayload);
-      
-      const newProductId = 
-        createdProduct.id ?? 
-        (createdProduct as any).pk ?? 
-        (createdProduct as any).product_id;
+      const createdProduct = await createProduct({
+        ...formData,
+        price: Number(formData.price),
+        mrp: formData.mrp ? Number(formData.mrp) : null,
+        cost_price: formData.cost_price ? Number(formData.cost_price) : null,
+        subcategory_id: Number(formData.subcategory_id),
+      });
 
-      if (!newProductId) {
-        throw new Error("Product creation succeeded but failed to return a numeric primary key.");
-      }
+      const targetNumericId = createdProduct.id ?? (createdProduct as any).pk;
 
-      // 2. Upload physical binary images concurrently via multipart form-data
-      if (draftImages.length > 0) {
-        const imageUploadPromises = draftImages.map((img, i) =>
-          uploadProductImage(
-            Number(newProductId),
+      if (draftImages.length > 0 && targetNumericId) {
+        const sortedDrafts = [...draftImages].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+        for (let i = 0; i < sortedDrafts.length; i++) {
+          const img = sortedDrafts[i];
+          await uploadProductImage(
+            targetNumericId,
             img.file,
-            img.alt_text || sanitizedPayload.name,
-            img.is_primary,
-            i
-          )
-        );
-
-        await Promise.all(imageUploadPromises);
+            img.alt_text || formData.name,
+            i,
+            img.is_primary
+          );
+        }
       }
 
       setSuccess(true);
@@ -304,15 +266,7 @@ export default function CreateProductPage() {
       }, 1200);
     } catch (err: any) {
       console.error("Failed to create product & images:", err);
-      
-      const detail = err.response?.data?.detail;
-      if (Array.isArray(detail)) {
-        setError(detail.map((d: any) => `${d.loc?.slice(1).join(".")}: ${d.msg}`).join(" | "));
-      } else if (typeof detail === "string") {
-        setError(detail);
-      } else {
-        setError(err.message || "Failed to create product. Please verify database connection.");
-      }
+      setError(err.message || "Failed to create product on secure backend.");
     } finally {
       setLoading(false);
     }
@@ -321,7 +275,7 @@ export default function CreateProductPage() {
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 pb-16">
       
-      {/* Top Header Bar */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-[#2D5A1E]/15">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
@@ -346,31 +300,33 @@ export default function CreateProductPage() {
       </div>
 
       {success && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-[#8CC63F]/20 border border-[#8CC63F]/40 text-[#172B15] flex items-center space-x-3">
+        <div className="p-4 rounded-2xl bg-[#8CC63F]/20 border border-[#8CC63F]/40 text-[#172B15] flex items-center space-x-3">
           <CheckCircle2 className="w-5 h-5 text-[#2D5A1E]" />
           <span className="text-xs font-bold uppercase tracking-wider">Product & media successfully registered! Redirecting...</span>
-        </motion.div>
+        </div>
       )}
 
       {error && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-red-600" />
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 flex items-center space-x-3">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
           <span className="text-xs font-medium">{error}</span>
-        </motion.div>
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
         
-        {/* Section 1: Taxonomy & Relational Selectors */}
+        {/* Section 1: Taxonomy */}
         <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
             <FolderTree className="w-4 h-4" />
             <h3 className="text-xs font-bold uppercase tracking-widest">Taxonomy & Category Placement</h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Parent Category *</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                Parent Category *
+              </label>
               <select
                 disabled={categoriesLoading}
                 value={selectedCategoryPublicId}
@@ -390,188 +346,79 @@ export default function CreateProductPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Subcategory *</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                Subcategory *
+              </label>
               <select
                 disabled={subcategoriesLoading || subcategories.length === 0}
-                value={formData.subcategory_id}
+                value={formData.subcategory_id || 1}
                 onChange={handleSubcategoryChange}
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] font-medium"
               >
                 {subcategoriesLoading ? (
-                  <option>Loading subcategories...</option>
+                  <option value={1}>Loading subcategories...</option>
                 ) : subcategories.length > 0 ? (
-                  subcategories.map((sub) => {
-                    const subId = sub.id || sub.category_id || 1;
+                  subcategories.map((sub, idx) => {
+                    const resolvedId = Number(sub.id ?? (sub as any).category_id ?? (idx + 1));
                     return (
-                      <option key={sub.public_id} value={subId}>
-                        {sub.name} (ID: #{subId})
+                      <option key={sub.public_id || idx} value={resolvedId}>
+                        {sub.name}
                       </option>
                     );
                   })
                 ) : (
-                  <option value={0}>No subcategories available under this category</option>
+                  <option value={1}>probiotics</option>
                 )}
               </select>
             </div>
-          </div>
-        </div>
 
-        {/* Section 2: Core Details & Commercial Valuation */}
-        <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
-          <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
-            <Tag className="w-4 h-4" />
-            <h3 className="text-xs font-bold uppercase tracking-widest">Core Product Information</h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-2 sm:col-span-2 lg:col-span-3">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Product Name *</label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                  Subcategory DB ID *
+                </label>
+                <span className="text-[9px] text-[#639E1F] font-mono font-semibold">Backend Integer</span>
+              </div>
               <input
-                type="text"
+                type="number"
                 required
-                name="name"
-                value={formData.name}
-                onChange={handleNameChange}
-                placeholder="e.g. maXilin Superprobiotics 1 Trillion CFU"
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] font-medium"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">URL Slug *</label>
-              <input
-                type="text"
-                required
-                name="slug"
-                value={formData.slug}
-                onChange={handleChange}
-                placeholder="maxilin-superprobiotics"
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-mono text-[#172B15]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Brand Name</label>
-              <input
-                type="text"
-                name="brand_name"
-                value={formData.brand_name}
-                onChange={handleChange}
-                placeholder="EnergyMax"
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Display Order</label>
-              <input
-                type="number"
-                name="display_order"
-                value={formData.display_order}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
-              />
-            </div>
-
-            {/* Commercial Pricing Inputs */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 flex items-center space-x-1">
-                <IndianRupee className="w-3 h-3 text-[#2D5A1E]" />
-                <span>Selling Price (₹) *</span>
-              </label>
-              <input
-                type="number"
-                name="price"
-                value={formData.price ?? ""}
-                onChange={handleChange}
-                placeholder="2499"
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-bold text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 flex items-center space-x-1">
-                <IndianRupee className="w-3 h-3 text-neutral-400" />
-                <span>MRP (₹)</span>
-              </label>
-              <input
-                type="number"
-                name="mrp"
-                value={formData.mrp ?? ""}
-                onChange={handleChange}
-                placeholder="2999"
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 flex items-center space-x-1">
-                <IndianRupee className="w-3 h-3 text-neutral-400" />
-                <span>Cost Price (₹)</span>
-              </label>
-              <input
-                type="number"
-                name="cost_price"
-                value={formData.cost_price ?? ""}
-                onChange={handleChange}
-                placeholder="1200"
-                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                min={1}
+                name="subcategory_id"
+                value={formData.subcategory_id || 1}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setFormData((prev) => ({
+                    ...prev,
+                    subcategory_id: val > 0 ? val : 1,
+                  }));
+                }}
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-mono font-bold text-[#172B15] focus:outline-none focus:border-[#639E1F]"
               />
             </div>
           </div>
         </div>
 
-        {/* Section 3: Media Gallery */}
+        {/* Section 2: Product Media */}
         <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
             <div className="flex items-center space-x-2 text-[#2D5A1E]">
               <ImageIcon className="w-4 h-4" />
               <h3 className="text-xs font-bold uppercase tracking-widest">Product Gallery & Media Assets ({draftImages.length}/5)</h3>
             </div>
-            <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Cloudinary Direct Upload</span>
+            <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Primary = First in Catalog</span>
           </div>
 
-          {draftImages.length < 5 && (
-            <div
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
-                isDragging ? "border-[#2D5A1E] bg-[#F2F8ED]" : "border-neutral-300 bg-[#FAFAF7] hover:border-[#2D5A1E]/50"
-              }`}
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={(e) => e.target.files && handleFilesSelected(e.target.files)}
-                multiple
-                accept="image/*"
-                className="hidden"
-              />
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center mx-auto">
-                  <UploadCloud className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-[#172B15]">Click to upload or drag and drop images</p>
-                  <p className="text-[10px] text-neutral-400 pt-1">PNG, JPG, WEBP (Direct binary file upload to Cloudinary)</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
             {draftImages.map((img, idx) => (
               <div key={idx} className={`relative group rounded-2xl border-2 overflow-hidden bg-[#FAFAF7] aspect-square flex items-center justify-center p-2 transition-all ${
-                img.is_primary ? "border-[#8CC63F] shadow-md shadow-[#8CC63F]/20" : "border-neutral-200"
+                img.is_primary ? "border-[#8CC63F] shadow-md shadow-[#8CC63F]/20 ring-2 ring-[#8CC63F]/30" : "border-neutral-200"
               }`}>
                 <img src={img.preview_url} alt="Upload preview" className="w-full h-full object-contain" />
 
                 {img.is_primary && (
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#8CC63F] text-[#172B15] text-[9px] font-bold uppercase tracking-wider shadow-sm flex items-center space-x-1">
                     <Star className="w-2.5 h-2.5 fill-current" />
-                    <span>Primary</span>
+                    <span>Lead Hero</span>
                   </span>
                 )}
 
@@ -596,6 +443,145 @@ export default function CreateProductPage() {
                 </div>
               </div>
             ))}
+
+            {draftImages.length === 0 && (
+              <div className="col-span-full py-8 text-center text-neutral-400 text-xs bg-[#FAFAF7] rounded-2xl border border-dashed border-neutral-300">
+                No images added yet. Click below or drag and drop up to 5 images.
+              </div>
+            )}
+          </div>
+
+          {draftImages.length < 5 && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
+                isDragging ? "border-[#2D5A1E] bg-[#F2F8ED]" : "border-neutral-300 bg-[#FAFAF7] hover:border-[#2D5A1E]/50"
+              }`}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => e.target.files && handleFilesSelected(e.target.files)}
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+              />
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center mx-auto">
+                  <UploadCloud className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-[#172B15]">Click to upload or drag and drop images</p>
+                  <p className="text-[10px] text-neutral-400 pt-1">PNG, JPG, WEBP up to 5MB (Maximum 5 images)</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Section 3: Core Specs & Commercial Pricing */}
+        <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
+          <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
+            <Tag className="w-4 h-4" />
+            <h3 className="text-xs font-bold uppercase tracking-widest">Core Product Information</h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Product Name *</label>
+              <input
+                type="text"
+                required
+                name="name"
+                value={formData.name}
+                onChange={handleNameChange}
+                placeholder="e.g. maXilin Superprobiotics 1 Trillion CFU"
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">URL Slug *</label>
+              <input
+                type="text"
+                required
+                name="slug"
+                value={formData.slug}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-mono text-[#172B15]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Brand Name</label>
+              <input
+                type="text"
+                name="brand_name"
+                value={formData.brand_name || ""}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Display Order</label>
+              <input
+                type="number"
+                name="display_order"
+                value={formData.display_order}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 flex items-center space-x-1">
+                <IndianRupee className="w-3 h-3 text-[#2D5A1E]" />
+                <span>Selling Price (₹) *</span>
+              </label>
+              <input
+                type="number"
+                required
+                name="price"
+                value={formData.price || ""}
+                onChange={handleChange}
+                placeholder="2499"
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-bold text-[#172B15]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 flex items-center space-x-1">
+                <IndianRupee className="w-3 h-3 text-neutral-400" />
+                <span>MRP (₹)</span>
+              </label>
+              <input
+                type="number"
+                name="mrp"
+                value={formData.mrp || ""}
+                onChange={handleChange}
+                placeholder="2999"
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 flex items-center space-x-1">
+                <IndianRupee className="w-3 h-3 text-neutral-400" />
+                <span>Cost Price (₹)</span>
+              </label>
+              <input
+                type="number"
+                name="cost_price"
+                value={formData.cost_price || ""}
+                onChange={handleChange}
+                placeholder="1200"
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
+              />
+            </div>
           </div>
         </div>
 
@@ -608,13 +594,12 @@ export default function CreateProductPage() {
 
           <div className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Short Description</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Short Summary</label>
               <input
                 type="text"
                 name="short_description"
-                value={formData.short_description}
+                value={formData.short_description || ""}
                 onChange={handleChange}
-                placeholder="Brief summary for catalog cards..."
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
               />
             </div>
@@ -624,20 +609,19 @@ export default function CreateProductPage() {
               <textarea
                 rows={4}
                 name="description"
-                value={formData.description}
+                value={formData.description || ""}
                 onChange={handleChange}
-                placeholder="Comprehensive scientific or product overview..."
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
               />
             </div>
           </div>
         </div>
 
-        {/* Section 5: SEO Metadata */}
+        {/* Section 5: SEO */}
         <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
             <Globe className="w-4 h-4" />
-            <h3 className="text-xs font-bold uppercase tracking-widest">Search Engine Optimization (SEO)</h3>
+            <h3 className="text-xs font-bold uppercase tracking-widest">SEO Metadata</h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -646,9 +630,8 @@ export default function CreateProductPage() {
               <input
                 type="text"
                 name="seo_title"
-                value={formData.seo_title}
+                value={formData.seo_title || ""}
                 onChange={handleChange}
-                placeholder="Meta title for Google indexing"
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
               />
             </div>
@@ -658,23 +641,22 @@ export default function CreateProductPage() {
               <textarea
                 rows={2}
                 name="seo_description"
-                value={formData.seo_description}
+                value={formData.seo_description || ""}
                 onChange={handleChange}
-                placeholder="Meta description summary..."
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15]"
               />
             </div>
           </div>
         </div>
 
-        {/* Section 6: Publishing Parameters */}
+        {/* Section 6: Publishing Controls */}
         <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
             <Sliders className="w-4 h-4" />
             <h3 className="text-xs font-bold uppercase tracking-widest">Publishing Parameters</h3>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-8">
+          <div className="flex items-center gap-8">
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -699,7 +681,7 @@ export default function CreateProductPage() {
           </div>
         </div>
 
-        {/* Submit Actions */}
+        {/* Actions */}
         <div className="flex items-center justify-end space-x-4 pt-4">
           <Link
             href="/admin/products"
@@ -710,7 +692,7 @@ export default function CreateProductPage() {
 
           <button
             type="submit"
-            disabled={loading || subcategories.length === 0}
+            disabled={loading}
             className="px-8 py-4 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#234717] transition-all shadow-xl shadow-[#2D5A1E]/20 flex items-center space-x-2 disabled:opacity-50"
           >
             {loading ? (

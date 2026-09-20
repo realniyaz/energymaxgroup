@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Layers, 
   PlusCircle, 
   Trash2, 
   Edit2, 
@@ -14,7 +13,8 @@ import {
   Tag,
   X,
   Save,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from "lucide-react";
 import { 
   getCategories, 
@@ -35,6 +35,7 @@ export default function AdminCategoriesPage() {
   
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingSubcats, setLoadingSubcats] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // New Category Form State
   const [newCatName, setNewCatName] = useState("");
@@ -52,11 +53,12 @@ export default function AdminCategoriesPage() {
   const [newSubSlug, setNewSubSlug] = useState("");
   const [creatingSub, setCreatingSub] = useState(false);
 
-  // Initial Load (Safely fetches using public_id string)
+  // Initial Load (Safely fetches categories and populates the default category)
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const res = await getCategories();
+      setErrorMessage(null);
+      const res = await getCategories(1, 100, true);
       const list = res.items || [];
       setCategories(list);
       
@@ -72,8 +74,9 @@ export default function AdminCategoriesPage() {
         setSelectedCategory(null);
         setSubcategories([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Fetch failed:", err);
+      setErrorMessage(err.message || "Failed to load categories from backend.");
     } finally {
       setLoading(false);
     }
@@ -87,6 +90,7 @@ export default function AdminCategoriesPage() {
   const handleSelectCategory = async (cat: Category) => {
     setSelectedCategory(cat);
     setLoadingSubcats(true);
+    setErrorMessage(null);
     
     try {
       if (cat.public_id) {
@@ -95,7 +99,8 @@ export default function AdminCategoriesPage() {
       } else {
         setSubcategories([]);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Failed to load subcategories:", err);
       setSubcategories([]);
     } finally {
       setLoadingSubcats(false);
@@ -105,13 +110,21 @@ export default function AdminCategoriesPage() {
   // Handle Category Creation
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName) return;
+    if (!newCatName.trim()) return;
 
     try {
       setCreatingCat(true);
+      setErrorMessage(null);
+
+      const cleanSlug = (newCatSlug || newCatName)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-");
+
       const created = await createCategory({
-        name: newCatName,
-        slug: newCatSlug || newCatName.toLowerCase().replace(/\s+/g, "-"),
+        name: newCatName.trim(),
+        slug: cleanSlug,
         display_order: categories.length,
         is_active: true,
       });
@@ -121,9 +134,10 @@ export default function AdminCategoriesPage() {
       setNewCatName("");
       setNewCatSlug("");
       
-      handleSelectCategory(created);
-    } catch (err) {
-      alert("Failed to create category.");
+      await handleSelectCategory(created);
+    } catch (err: any) {
+      console.error("Failed to create category:", err);
+      setErrorMessage(err.message || "Failed to create category. Ensure name and slug are unique.");
     } finally {
       setCreatingCat(false);
     }
@@ -136,28 +150,40 @@ export default function AdminCategoriesPage() {
 
     try {
       setUpdatingCat(true);
+      setErrorMessage(null);
+
+      const cleanSlug = (editCatSlug || editCatName)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-");
+
       const updated = await updateCategory(editingCategory.public_id, {
-        name: editCatName,
-        slug: editCatSlug,
+        name: editCatName.trim(),
+        slug: cleanSlug,
       });
 
-      const updatedCategories = categories.map((c) => c.public_id === updated.public_id ? updated : c);
+      const updatedCategories = categories.map((c) => 
+        c.public_id === updated.public_id ? updated : c
+      );
       setCategories(updatedCategories);
       if (selectedCategory?.public_id === updated.public_id) {
         setSelectedCategory(updated);
       }
       setEditingCategory(null);
-    } catch (err) {
-      alert("Failed to update category.");
+    } catch (err: any) {
+      console.error("Failed to update category:", err);
+      setErrorMessage(err.message || "Failed to update category.");
     } finally {
       setUpdatingCat(false);
     }
   };
 
-  // Handle Category Deletion
+  // Handle Category Deletion with Safe Subcategory Switch
   const handleDeleteCategory = async (publicId: string) => {
-    if (!confirm("Delete this category?")) return;
+    if (!confirm("Delete this category? All child subcategories may be affected.")) return;
     try {
+      setErrorMessage(null);
       await deleteCategory(publicId);
       
       const remainingCategories = categories.filter((c) => c.public_id !== publicId);
@@ -165,36 +191,46 @@ export default function AdminCategoriesPage() {
 
       if (selectedCategory?.public_id === publicId) {
         if (remainingCategories.length > 0) {
-          handleSelectCategory(remainingCategories[0]);
+          await handleSelectCategory(remainingCategories[0]);
         } else {
           setSelectedCategory(null);
           setSubcategories([]);
         }
       }
-    } catch (err) {
-      alert("Failed to delete category.");
+    } catch (err: any) {
+      console.error("Failed to delete category:", err);
+      setErrorMessage(err.message || "Failed to delete category.");
     }
   };
 
   // Handle Subcategory Creation using category_public_id string
   const handleCreateSubcategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubName || !selectedCategory?.public_id) {
+    if (!newSubName.trim() || !selectedCategory?.public_id) {
       alert("Please select a valid parent category from the left list.");
       return;
     }
 
     try {
       setCreatingSub(true);
+      setErrorMessage(null);
+
+      const cleanSlug = (newSubSlug || newSubName)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-");
+
       await createSubcategory({
         category_public_id: selectedCategory.public_id,
-        name: newSubName,
-        slug: newSubSlug || newSubName.toLowerCase().replace(/\s+/g, "-"),
+        name: newSubName.trim(),
+        slug: cleanSlug,
         description: "",
         image_url: "",
         display_order: subcategories.length,
         is_active: true,
       });
+
       setNewSubName("");
       setNewSubSlug("");
       
@@ -203,9 +239,9 @@ export default function AdminCategoriesPage() {
     } catch (err: any) {
       console.error("Error creating subcategory:", err);
       if (err.message && err.message.includes("already exists")) {
-        alert("A subcategory with this slug already exists in this category.");
+        setErrorMessage("A subcategory with this slug already exists in this category.");
       } else {
-        alert("Failed to create subcategory.");
+        setErrorMessage(err.message || "Failed to create subcategory.");
       }
     } finally {
       setCreatingSub(false);
@@ -216,13 +252,15 @@ export default function AdminCategoriesPage() {
   const handleDeleteSubcategory = async (publicId: string) => {
     if (!confirm("Delete this subcategory?")) return;
     try {
+      setErrorMessage(null);
       await deleteSubcategory(publicId);
       if (selectedCategory?.public_id) {
         const subs = await getSubcategoriesByCategory(selectedCategory.public_id);
         setSubcategories(subs || []);
       }
-    } catch (err) {
-      alert("Failed to delete subcategory.");
+    } catch (err: any) {
+      console.error("Failed to delete subcategory:", err);
+      setErrorMessage(err.message || "Failed to delete subcategory.");
     }
   };
 
@@ -233,7 +271,10 @@ export default function AdminCategoriesPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-[#2D5A1E]/15">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
-            <Link href="/admin/dashboard" className="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-[#2D5A1E] transition-colors flex items-center space-x-1">
+            <Link 
+              href="/admin/dashboard" 
+              className="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-[#2D5A1E] transition-colors flex items-center space-x-1"
+            >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Dashboard</span>
             </Link>
@@ -263,10 +304,30 @@ export default function AdminCategoriesPage() {
         </div>
       </div>
 
-      {/* Grid */}
+      {/* Error Alert Banner */}
+      {errorMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 flex items-center justify-between shadow-sm"
+        >
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+            <span className="text-xs font-medium">{errorMessage}</span>
+          </div>
+          <button 
+            onClick={() => setErrorMessage(null)} 
+            className="text-xs font-bold uppercase tracking-wider text-red-700 hover:text-red-900"
+          >
+            Dismiss
+          </button>
+        </motion.div>
+      )}
+
+      {/* Dual Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         
-        {/* Categories Section */}
+        {/* Categories Column */}
         <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
             <FolderTree className="w-4 h-4" />
@@ -275,7 +336,7 @@ export default function AdminCategoriesPage() {
 
           <form onSubmit={handleCreateCategory} className="space-y-4 bg-[#FAFAF7] p-4 rounded-2xl border border-neutral-200">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Category Name</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Category Name *</label>
               <input
                 type="text"
                 required
@@ -283,13 +344,13 @@ export default function AdminCategoriesPage() {
                 value={newCatName}
                 onChange={(e) => {
                   setNewCatName(e.target.value);
-                  setNewCatSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"));
+                  setNewCatSlug(e.target.value.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-"));
                 }}
                 className="w-full px-4 py-2.5 rounded-xl bg-white border border-neutral-200 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Slug</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Slug *</label>
               <input
                 type="text"
                 required
@@ -309,7 +370,9 @@ export default function AdminCategoriesPage() {
           </form>
 
           <div className="space-y-2">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Existing Categories (Click to Select)</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+              Existing Categories (Click to Select)
+            </h4>
             {loading ? (
               <div className="py-8 text-center text-neutral-400 text-xs flex items-center justify-center space-x-2">
                 <Loader2 className="w-4 h-4 animate-spin text-[#2D5A1E]" />
@@ -322,14 +385,13 @@ export default function AdminCategoriesPage() {
                   return (
                     <div
                       key={cat.public_id}
-                      onClick={() => handleSelectCategory(cat)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                      className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
                         isSelected
                           ? "bg-[#F2F8ED] border-[#8CC63F] shadow-sm ring-1 ring-[#8CC63F]"
                           : "bg-white border-neutral-200 hover:border-[#2D5A1E]/30"
                       }`}
                     >
-                      <div className="flex-1">
+                      <div onClick={() => handleSelectCategory(cat)} className="cursor-pointer flex-1">
                         <h5 className="font-semibold text-[#172B15] text-sm">{cat.name}</h5>
                         <span className="text-[10px] font-mono text-neutral-400">/{cat.slug}</span>
                       </div>
@@ -365,7 +427,7 @@ export default function AdminCategoriesPage() {
           </div>
         </div>
 
-        {/* Subcategories Section */}
+        {/* Subcategories Column */}
         <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex items-center space-x-2 pb-4 border-b border-neutral-100 text-[#2D5A1E]">
             <Tag className="w-4 h-4" />
@@ -375,17 +437,18 @@ export default function AdminCategoriesPage() {
           </div>
 
           <form onSubmit={handleCreateSubcategory} className="space-y-4 bg-[#FAFAF7] p-4 rounded-2xl border border-neutral-200">
-            
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Active Parent Category</label>
               <div className="w-full px-4 py-2.5 rounded-xl bg-white border border-neutral-200 text-xs font-semibold text-[#2D5A1E] flex items-center justify-between">
-                <span>{selectedCategory ? selectedCategory.name : "None selected"}</span>
-                <span className="text-[10px] font-mono text-neutral-400">Ready</span>
+                <span>{selectedCategory ? selectedCategory.name : "None selected (Click a category on the left)"}</span>
+                <span className="text-[10px] font-mono text-neutral-400">
+                  {selectedCategory ? "Linked" : "Waiting"}
+                </span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Subcategory Name</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Subcategory Name *</label>
               <input
                 type="text"
                 required
@@ -393,13 +456,13 @@ export default function AdminCategoriesPage() {
                 value={newSubName}
                 onChange={(e) => {
                   setNewSubName(e.target.value);
-                  setNewSubSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"));
+                  setNewSubSlug(e.target.value.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-"));
                 }}
                 className="w-full px-4 py-2.5 rounded-xl bg-white border border-neutral-200 text-xs text-[#172B15]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Slug</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Slug *</label>
               <input
                 type="text"
                 required
@@ -420,7 +483,9 @@ export default function AdminCategoriesPage() {
           </form>
 
           <div className="space-y-2">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Associated Subcategories</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+              Associated Subcategories
+            </h4>
             {loadingSubcats ? (
               <div className="py-8 text-center text-neutral-400 text-xs flex items-center justify-center space-x-2">
                 <Loader2 className="w-4 h-4 animate-spin text-[#2D5A1E]" />
@@ -432,7 +497,9 @@ export default function AdminCategoriesPage() {
                   <div key={sub.public_id} className="p-4 rounded-2xl bg-[#FAFAF7] border border-neutral-200 flex items-center justify-between">
                     <div>
                       <h5 className="font-semibold text-[#172B15] text-sm">{sub.name}</h5>
-                      <span className="text-[10px] font-mono text-neutral-400">/{sub.slug}</span>
+                      <span className="text-[10px] font-mono text-neutral-400">
+                        ID: #{sub.id} | /{sub.slug}
+                      </span>
                     </div>
                     <button
                       onClick={() => handleDeleteSubcategory(sub.public_id)}
@@ -445,7 +512,9 @@ export default function AdminCategoriesPage() {
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center text-neutral-400 text-xs">No subcategories found for this category.</div>
+              <div className="py-8 text-center text-neutral-400 text-xs">
+                No subcategories found for this category.
+              </div>
             )}
           </div>
         </div>
@@ -456,7 +525,12 @@ export default function AdminCategoriesPage() {
       <AnimatePresence>
         {editingCategory && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl border border-[#2D5A1E]/15">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.95 }} 
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl border border-[#2D5A1E]/15"
+            >
               <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-[#2D5A1E]">Edit Category</h3>
                 <button onClick={() => setEditingCategory(null)} className="p-2 rounded-full hover:bg-neutral-100 transition-all">
