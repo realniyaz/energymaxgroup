@@ -20,7 +20,7 @@ import {
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
 export default function CustomerRegisterPage() {
-  const { register } = useCustomerAuth();
+  const { registerCustomer } = useCustomerAuth();
 
   const [formData, setFormData] = useState({
     username: "",
@@ -62,7 +62,7 @@ export default function CustomerRegisterPage() {
     setLoading(true);
 
     try {
-      await register({
+      await registerCustomer({
         username: formData.username.trim(),
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim() || undefined,
@@ -227,7 +227,7 @@ export default function CustomerRegisterPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Email
+                  Email *
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
@@ -243,7 +243,7 @@ export default function CustomerRegisterPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Phone
+                  Phone *
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />

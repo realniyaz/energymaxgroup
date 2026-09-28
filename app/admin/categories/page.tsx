@@ -58,7 +58,7 @@ export default function AdminCategoriesPage() {
     try {
       setLoading(true);
       setErrorMessage(null);
-      const res = await getCategories(1, 100, true);
+      const res = await getCategories(1, 100);
       const list = res.items || [];
       setCategories(list);
       
