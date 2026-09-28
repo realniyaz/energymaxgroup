@@ -1,120 +1,152 @@
-// context/customer-auth-context.tsx
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import {
-  CustomerResponse,
-  CustomerRegisterPayload,
-  CustomerLoginPayload,
-  registerCustomer as apiRegister,
-  loginCustomer as apiLogin,
-  logoutCustomer as apiLogout,
-  requestCustomerOTP as apiRequestOtp,
-  verifyCustomerOTP as apiVerifyOtp,
-} from "@/lib/services/customerAuthService";
+import { customerClient, setCustomerSessionToken, getCustomerSessionToken } from "@/lib/customer-client";
+
+export interface CustomerUser {
+  public_id: string;
+  username: string;
+  first_name: string;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  email_verified: boolean;
+  phone_verified: boolean;
+  is_active: boolean;
+  last_login_at?: string | null;
+  created_at: string;
+}
 
 interface CustomerAuthContextType {
-  customer: CustomerResponse | null;
-  sessionToken: string | null;
+  customer: CustomerUser | null;
   loading: boolean;
-  loginWithPassword: (payload: CustomerLoginPayload) => Promise<void>;
-  register: (payload: CustomerRegisterPayload) => Promise<void>;
-  requestOtp: (destination: string, purpose: "login" | "registration" | "password_reset") => Promise<string | null>;
-  verifyOtp: (destination: string, code: string, purpose: "login" | "registration" | "password_reset") => Promise<void>;
+  isAuthenticated: boolean;
+  loginWithPassword: (identifier: string, password: string) => Promise<void>;
+  registerCustomer: (data: {
+    username: string;
+    first_name: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+    password: string;
+  }) => Promise<void>;
+  requestOtp: (destination: string, channel: "email" | "sms", purpose: "login" | "registration" | "password_reset") => Promise<{ message: string; expires_at?: string }>;
+  verifyOtp: (destination: string, code: string, channel: "email" | "sms", purpose: "login" | "registration" | "password_reset") => Promise<void>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const CustomerAuthContext = createContext<CustomerAuthContextType | undefined>(undefined);
 
-const TOKEN_KEY = "customer_session_token";
-const PROFILE_KEY = "customer_profile";
+export const CustomerAuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [customer, setCustomer] = useState<CustomerUser | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-export function CustomerAuthProvider({ children }: { children: React.ReactNode }) {
-  const [customer, setCustomer] = useState<CustomerResponse | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  // Hydrate customer profile using existing stored session token
+  const refreshProfile = useCallback(async () => {
+    const token = getCustomerSessionToken();
+    if (!token) {
+      setCustomer(null);
+      setLoading(false);
+      return;
+    }
 
-  // Load persisted session on initial mount
-  useEffect(() => {
     try {
-      const storedToken = localStorage.getItem(TOKEN_KEY);
-      const storedProfile = localStorage.getItem(PROFILE_KEY);
-
-      if (storedToken && storedProfile) {
-        setSessionToken(storedToken);
-        setCustomer(JSON.parse(storedProfile));
-      }
+      // Direct customer profile fetch
+      const res = await customerClient.get<CustomerUser>("/api/v1/shop/customer/profile");
+      setCustomer(res.data);
     } catch {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(PROFILE_KEY);
+      // Invalidate if token expired or revoked on backend
+      setCustomerSessionToken(null);
+      setCustomer(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const persistSession = useCallback((cust: CustomerResponse, token: string) => {
-    setCustomer(cust);
-    setSessionToken(token);
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(cust));
-  }, []);
+  useEffect(() => {
+    refreshProfile();
+  }, [refreshProfile]);
 
-  const clearSession = useCallback(() => {
-    setCustomer(null);
-    setSessionToken(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(PROFILE_KEY);
-  }, []);
-
-  const loginWithPassword = async (payload: CustomerLoginPayload) => {
-    const res = await apiLogin(payload);
-    persistSession(res.customer, res.session_token);
-    router.push("/shop");
+  // Standard Password Login
+  const loginWithPassword = async (identifier: string, password: string) => {
+    setLoading(true);
+    try {
+      const res = await customerClient.post<{ customer: CustomerUser; session_token: string }>(
+        "/api/v1/shop/customer/auth/login",
+        { identifier, password }
+      );
+      setCustomerSessionToken(res.data.session_token);
+      setCustomer(res.data.customer);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const register = async (payload: CustomerRegisterPayload) => {
-    const res = await apiRegister(payload);
-    persistSession(res.customer, res.session_token);
-    router.push("/shop");
+  // Direct Registration
+  const registerCustomer = async (data: {
+    username: string;
+    first_name: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+    password: string;
+  }) => {
+    setLoading(true);
+    try {
+      const res = await customerClient.post<{ customer: CustomerUser; session_token: string }>(
+        "/api/v1/shop/customer/auth/register",
+        data
+      );
+      setCustomerSessionToken(res.data.session_token);
+      setCustomer(res.data.customer);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // OTP Dispatch
   const requestOtp = async (
     destination: string,
+    channel: "email" | "sms",
     purpose: "login" | "registration" | "password_reset"
-  ): Promise<string | null> => {
-    const res = await apiRequestOtp({
-      destination,
-      channel: "email",
-      purpose,
-    });
-    return res.expires_at;
+  ) => {
+    const res = await customerClient.post<{ message: string; expires_at?: string }>(
+      "/api/v1/shop/customer/auth/otp/request",
+      { destination, channel, purpose }
+    );
+    return res.data;
   };
 
+  // OTP Verification
   const verifyOtp = async (
     destination: string,
     code: string,
+    channel: "email" | "sms",
     purpose: "login" | "registration" | "password_reset"
   ) => {
-    const res = await apiVerifyOtp({
-      destination,
-      channel: "email",
-      purpose,
-      code,
-    });
-    persistSession(res.customer, res.session_token);
-    router.push("/shop");
+    setLoading(true);
+    try {
+      const res = await customerClient.post<{ customer: CustomerUser; session_token: string }>(
+        "/api/v1/shop/customer/auth/otp/verify",
+        { destination, code, channel, purpose }
+      );
+      setCustomerSessionToken(res.data.session_token);
+      setCustomer(res.data.customer);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Session Revocation
   const logout = async () => {
     try {
-      await apiLogout();
+      await customerClient.post("/api/v1/shop/customer/auth/logout");
     } catch {
-      // Clear client state even if backend session already expired
+      // Continue client cleanup even if network fails
     } finally {
-      clearSession();
-      router.push("/shop");
+      setCustomerSessionToken(null);
+      setCustomer(null);
     }
   };
 
@@ -122,24 +154,25 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     <CustomerAuthContext.Provider
       value={{
         customer,
-        sessionToken,
         loading,
+        isAuthenticated: !!customer,
         loginWithPassword,
-        register,
+        registerCustomer,
         requestOtp,
         verifyOtp,
         logout,
+        refreshProfile,
       }}
     >
       {children}
     </CustomerAuthContext.Provider>
   );
-}
+};
 
-export function useCustomerAuth() {
+export const useCustomerAuth = () => {
   const context = useContext(CustomerAuthContext);
   if (!context) {
     throw new Error("useCustomerAuth must be used within a CustomerAuthProvider");
   }
   return context;
-}
+};

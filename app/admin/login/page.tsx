@@ -19,8 +19,16 @@ export default function AdminLoginPage() {
     setLoading(true);
     try {
       await login(username, password);
-    } catch {
-      setError("Invalid administrative credentials or network error.");
+    } catch (err: any) {
+      console.error("Login attempt failed:", err);
+      const detail = err.response?.data?.detail;
+      if (typeof detail === "string") {
+        setError(detail);
+      } else if (Array.isArray(detail)) {
+        setError(detail.map((d: any) => d.msg).join(", "));
+      } else {
+        setError("Invalid administrative credentials or network error.");
+      }
     } finally {
       setLoading(false);
     }
@@ -29,20 +37,15 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col lg:flex-row">
       
-      {/* =========================================
-          LEFT SIDE: Brand Story & Product Showcase
-         ========================================= */}
+      {/* LEFT SIDE: Brand Story */}
       <div className="relative hidden lg:flex lg:w-1/2 bg-[#172B15] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden border-r border-[#2D5A1E]/30">
-        
-        {/* Ambient Glows */}
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#8CC63F]/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#2D5A1E]/40 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute inset-0 z-0 opacity-10 bg-[radial-gradient(#8CC63F_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
 
-        {/* Top Header: Logo & Back Link */}
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="relative w-12 h-12 bg-white/10 rounded-2xl p-2 border border-white/15 backdrop-blur-md flex items-center justify-center shadow-md">
+            <div className="relative w-12 h-12 bg-white rounded-2xl p-1.5 flex items-center justify-center shadow-md">
               <Image
                 src="/logo1.png"
                 alt="EnergyMax Group Logo"
@@ -71,7 +74,6 @@ export default function AdminLoginPage() {
           </Link>
         </div>
 
-        {/* Center: Editorial & Showcase Media Card */}
         <div className="relative z-10 my-auto py-10 space-y-8 max-w-xl">
           <div className="space-y-4">
             <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30 backdrop-blur-md">
@@ -91,7 +93,6 @@ export default function AdminLoginPage() {
             </p>
           </div>
 
-          {/* Product Banner Visual */}
           <div className="relative w-full h-56 xl:h-64 rounded-3xl overflow-hidden border border-white/15 shadow-2xl bg-neutral-900/60 group">
             <Image
               src="/newbanner1.png"
@@ -114,7 +115,6 @@ export default function AdminLoginPage() {
           </div>
         </div>
 
-        {/* Bottom Security Badge */}
         <div className="relative z-10 flex items-center space-x-2 text-neutral-400 pt-4 border-t border-white/10">
           <ShieldCheck className="w-4 h-4 text-[#8CC63F]" />
           <span className="text-[10px] uppercase tracking-wider font-medium">
@@ -123,19 +123,15 @@ export default function AdminLoginPage() {
         </div>
       </div>
 
-      {/* =========================================
-          RIGHT SIDE: Authentication Form
-         ========================================= */}
+      {/* RIGHT SIDE: Authentication Form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 lg:p-16 bg-[#FAFAF7]">
         <div className="max-w-md w-full bg-[#172B15] text-white p-8 sm:p-10 rounded-3xl border border-[#2D5A1E]/30 shadow-2xl space-y-8 relative overflow-hidden">
           
-          {/* Subtle Ambient Blob for Card */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#8CC63F]/10 rounded-full blur-2xl pointer-events-none" />
 
-          {/* Mobile Header Logo fallback */}
           <div className="flex items-center justify-between lg:hidden pb-4 border-b border-white/10">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-white/10 p-1 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center">
                 <Image src="/logo1.png" alt="EnergyMax Logo" width={24} height={24} className="object-contain" />
               </div>
               <span className="text-xs font-bold text-[#8CC63F] tracking-widest uppercase">EnergyMax</span>
@@ -171,13 +167,13 @@ export default function AdminLoginPage() {
               </label>
               <div className="relative">
                 <User className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-                <input suppressHydrationWarning
+                <input
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 pl-11 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#8CC63F] transition-all"
-                  placeholder="admin@energymax.com"
+                  placeholder="e.g. rohit.sharma or admin"
                 />
               </div>
             </div>
@@ -188,7 +184,7 @@ export default function AdminLoginPage() {
               </label>
               <div className="relative">
                 <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-                <input suppressHydrationWarning
+                <input
                   type="password"
                   required
                   value={password}

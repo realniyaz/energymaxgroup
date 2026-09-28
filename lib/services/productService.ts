@@ -1,14 +1,31 @@
 // lib/services/productService.ts
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://energymax-backend.onrender.com";
+import { apiClient } from "@/lib/api-client";
+import { guestClient } from "@/lib/guest-client";
+import { customerClient } from "@/lib/customer-client";
 
 /**
- * ============================================================================
- * TYPE DEFINITIONS (Synchronized 1:1 with FastAPI Pydantic Models)
- * ============================================================================
+ * =========================================================
+ * SCHEMAS & TYPES
+ * =========================================================
  */
+
+export interface ProductPayload {
+  subcategory_id: number;
+  name: string;
+  slug: string;
+  short_description?: string;
+  description?: string;
+  brand_name?: string;
+  price?: number;
+  mrp?: number;
+  cost_price?: number;
+  seo_title?: string;
+  seo_description?: string;
+  is_active: boolean;
+  is_featured: boolean;
+  display_order: number;
+}
 
 export interface ProductImage {
   public_id: string;
@@ -23,30 +40,13 @@ export interface ProductImage {
   updated_at: string;
 }
 
-export interface ProductPayload {
-  subcategory_id: number;
-  name: string;
-  slug: string;
-  price: number;
-  mrp?: number | null;
-  cost_price?: number | null;
-  short_description?: string | null;
-  description?: string | null;
-  brand_name?: string | null;
-  seo_title?: string | null;
-  seo_description?: string | null;
-  is_active?: boolean;
-  is_featured?: boolean;
-  display_order?: number;
-}
-
 export interface Product extends ProductPayload {
   id: number;
   public_id: string;
-  published_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  images: ProductImage[];
+  published_at?: string;
+  images?: ProductImage[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ProductListResponse {
@@ -59,15 +59,14 @@ export interface ProductListResponse {
 export interface CategoryPayload {
   name: string;
   slug: string;
-  description?: string | null;
-  image_url?: string | null;
-  display_order?: number;
-  is_active?: boolean;
+  description?: string;
+  image_url?: string;
+  display_order: number;
+  is_active: boolean;
 }
 
 export interface Category extends CategoryPayload {
-  id?: number;
-  category_id?: number;
+  id: number;
   public_id: string;
   created_at?: string;
   updated_at?: string;
@@ -84,137 +83,30 @@ export interface SubcategoryPayload {
   category_public_id: string;
   name: string;
   slug: string;
-  description?: string | null;
-  image_url?: string | null;
-  display_order?: number;
-  is_active?: boolean;
+  description?: string;
+  image_url?: string;
+  display_order: number;
+  is_active: boolean;
 }
 
-export interface Subcategory {
+export interface Subcategory extends Omit<SubcategoryPayload, "category_public_id"> {
   id: number;
   public_id: string;
   category_id: number;
-  name: string;
-  slug: string;
-  description?: string | null;
-  image_url?: string | null;
-  display_order: number;
-  is_active: boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface SubcategoryListResponse {
-  items: Subcategory[];
-  total: number;
-  page: number;
-  page_size: number;
-}
-
-interface CustomRequestInit extends RequestInit {
-  skipAuth?: boolean;
-}
-
 /**
- * ============================================================================
- * HTTP CLIENT CORE (Token-aware, Auto-cleans expired tokens)
- * ============================================================================
- */
-
-function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null;
-
-  const directToken =
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("admin_access_token") ||
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("access_token") ||
-    sessionStorage.getItem("admin_access_token");
-
-  if (directToken) return directToken;
-
-  try {
-    const match = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
-    if (match && match[1]) return decodeURIComponent(match[1]);
-  } catch {
-    // Ignore cookie read failures
-  }
-
-  return null;
-}
-
-function clearAuthTokens(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("admin_access_token");
-  localStorage.removeItem("token");
-  sessionStorage.removeItem("access_token");
-  sessionStorage.removeItem("admin_access_token");
-}
-
-async function fetchApi<T>(endpoint: string, options: CustomRequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const token = getAuthToken();
-
-  const headers: Record<string, string> = {
-    "ngrok-skip-browser-warning": "true",
-    ...(options.headers as Record<string, string>),
-  };
-
-  // Only attach Authorization if authentication is not explicitly skipped
-  if (!options.skipAuth && token && !headers["Authorization"]) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  // Set application/json only when sending JSON bodies (skip for FormData)
-  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    let errorDetail = "";
-    try {
-      const errorJson = await response.json();
-      errorDetail =
-        typeof errorJson.detail === "string"
-          ? errorJson.detail
-          : JSON.stringify(errorJson.detail || errorJson);
-    } catch {
-      errorDetail = await response.text();
-    }
-
-    // Auto-purge stale or dead tokens on 401 Unauthorized
-    if (response.status === 401) {
-      console.warn("Session expired or token invalid. Purging stale auth tokens.");
-      clearAuthTokens();
-    }
-
-    console.error(`FastAPI Error [${response.status}] at ${endpoint}:`, errorDetail);
-    throw new Error(errorDetail || `API Error [${response.status}]: ${response.statusText}`);
-  }
-
-  if (response.status === 204) {
-    return null as T;
-  }
-
-  return response.json();
-}
-
-/**
- * ============================================================================
- * PRODUCT CATALOG ENDPOINTS (Public Storefront Reads Use skipAuth: true)
- * ============================================================================
+ * =========================================================
+ * PUBLIC CATALOG QUERIES (guestClient with customerClient fallback)
+ * =========================================================
  */
 
 export async function getProducts(
-  page: number = 1,
-  pageSize: number = 50,
-  subcategoryId?: number,
+  page = 1,
+  pageSize = 50,
+  search?: string,
   isActive?: boolean
 ): Promise<ProductListResponse> {
   const params = new URLSearchParams({
@@ -222,259 +114,283 @@ export async function getProducts(
     page_size: String(pageSize),
   });
 
-  if (subcategoryId !== undefined && subcategoryId !== null) {
-    params.append("subcategory_id", String(subcategoryId));
-  }
-
-  if (isActive !== undefined && isActive !== null) {
+  if (isActive !== undefined) {
     params.append("is_active", String(isActive));
   }
-
-  // Public storefront endpoint: skipAuth guarantees no 401 crashes
-  const data = await fetchApi<any>(`/api/v1/catalog/products?${params.toString()}`, {
-    skipAuth: true,
-  });
-
-  if (Array.isArray(data)) {
-    return {
-      items: data,
-      total: data.length,
-      page,
-      page_size: pageSize,
-    };
+  if (search) {
+    params.append("search", search);
   }
 
-  return {
-    items: data.items || [],
-    total: data.total ?? (data.items ? data.items.length : 0),
-    page: data.page ?? page,
-    page_size: data.page_size ?? pageSize,
-  };
+  const endpoint = `/api/v1/catalog/products?${params.toString()}`;
+
+  try {
+    const response = await guestClient.get<any>(endpoint);
+    const data = response.data;
+    if (Array.isArray(data)) {
+      return { items: data, total: data.length, page: 1, page_size: pageSize };
+    }
+    return {
+      items: data.items || [],
+      total: data.total || 0,
+      page: data.page || page,
+      page_size: data.page_size || pageSize,
+    };
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      const retryResponse = await customerClient.get<any>(endpoint);
+      const data = retryResponse.data;
+      if (Array.isArray(data)) {
+        return { items: data, total: data.length, page: 1, page_size: pageSize };
+      }
+      return {
+        items: data.items || [],
+        total: data.total || 0,
+        page: data.page || page,
+        page_size: data.page_size || pageSize,
+      };
+    }
+    throw error;
+  }
 }
 
 export async function getProductByPublicId(publicId: string): Promise<Product> {
-  return fetchApi<Product>(`/api/v1/catalog/products/${publicId}`, {
-    skipAuth: true,
-  });
+  const endpoint = `/api/v1/catalog/products/${publicId}`;
+
+  try {
+    const response = await guestClient.get<Product>(endpoint);
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      const retryResponse = await customerClient.get<Product>(endpoint);
+      return retryResponse.data;
+    }
+    throw error;
+  }
 }
 
+export async function getProductImages(productId: number | string): Promise<ProductImage[]> {
+  try {
+    const cleanId = typeof productId === "string" ? parseInt(productId, 10) : productId;
+    if (!cleanId || isNaN(cleanId)) return [];
+
+    const endpoint = `/api/v1/catalog/product-images?product_id=${cleanId}`;
+
+    try {
+      const response = await guestClient.get<ProductImage[]>(endpoint);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        const retryResponse = await customerClient.get<ProductImage[]>(endpoint);
+        return Array.isArray(retryResponse.data) ? retryResponse.data : [];
+      }
+      return [];
+    }
+  } catch (err) {
+    console.error(`Failed to fetch images for product ID ${productId}:`, err);
+    return [];
+  }
+}
+
+export async function getCategories(page = 1, pageSize = 50): Promise<CategoryListResponse> {
+  const endpoint = `/api/v1/catalog/categories?page=${page}&page_size=${pageSize}`;
+
+  try {
+    const response = await guestClient.get<any>(endpoint);
+    const data = response.data;
+    if (Array.isArray(data)) {
+      return { items: data, total: data.length, page: 1, page_size: pageSize };
+    }
+    return {
+      items: data.items || [],
+      total: data.total || 0,
+      page: data.page || page,
+      page_size: data.page_size || pageSize,
+    };
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      const retryResponse = await customerClient.get<any>(endpoint);
+      const data = retryResponse.data;
+      if (Array.isArray(data)) {
+        return { items: data, total: data.length, page: 1, page_size: pageSize };
+      }
+      return {
+        items: data.items || [],
+        total: data.total || 0,
+        page: data.page || page,
+        page_size: data.page_size || pageSize,
+      };
+    }
+    throw error;
+  }
+}
+
+export async function getCategoryByPublicId(publicId: string): Promise<Category> {
+  const endpoint = `/api/v1/catalog/categories/${publicId}`;
+
+  try {
+    const response = await guestClient.get<Category>(endpoint);
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      const retryResponse = await customerClient.get<Category>(endpoint);
+      return retryResponse.data;
+    }
+    throw error;
+  }
+}
+
+export async function getSubcategoriesByCategory(categoryPublicId: string): Promise<Subcategory[]> {
+  try {
+    if (!categoryPublicId) return [];
+    const endpoint = `/api/v1/catalog/subcategories/category/${categoryPublicId}`;
+
+    try {
+      const response = await guestClient.get<any>(endpoint);
+      const data = response.data;
+      return Array.isArray(data) ? data : data.items || data.subcategories || [];
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        const retryResponse = await customerClient.get<any>(endpoint);
+        const data = retryResponse.data;
+        return Array.isArray(data) ? data : data.items || data.subcategories || [];
+      }
+      return [];
+    }
+  } catch {
+    return [];
+  }
+}
+
+export async function getSubcategoryByPublicId(publicId: string): Promise<Subcategory> {
+  const endpoint = `/api/v1/catalog/subcategories/${publicId}`;
+
+  try {
+    const response = await guestClient.get<Subcategory>(endpoint);
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      const retryResponse = await customerClient.get<Subcategory>(endpoint);
+      return retryResponse.data;
+    }
+    throw error;
+  }
+}
+
+/**
+ * =========================================================
+ * ADMIN CATALOG MUTATIONS (USES apiClient WITH ADMIN AUTH)
+ * =========================================================
+ */
+
 export async function createProduct(payload: ProductPayload): Promise<Product> {
-  return fetchApi<Product>("/api/v1/catalog/products", {
-    method: "POST",
-    body: JSON.stringify({
-      ...payload,
-      price: Number(payload.price),
-      mrp: payload.mrp ? Number(payload.mrp) : null,
-      cost_price: payload.cost_price ? Number(payload.cost_price) : null,
-      display_order: Number(payload.display_order || 0),
-      subcategory_id: Number(payload.subcategory_id),
-    }),
-  });
+  const response = await apiClient.post<Product>("/api/v1/catalog/products", payload);
+  return response.data;
 }
 
 export async function updateProduct(
   publicId: string,
   payload: Partial<ProductPayload>
 ): Promise<Product> {
-  const cleanPayload: Record<string, any> = { ...payload };
-  if (cleanPayload.price !== undefined) cleanPayload.price = Number(cleanPayload.price);
-  if (cleanPayload.mrp !== undefined) cleanPayload.mrp = cleanPayload.mrp ? Number(cleanPayload.mrp) : null;
-  if (cleanPayload.cost_price !== undefined) cleanPayload.cost_price = cleanPayload.cost_price ? Number(cleanPayload.cost_price) : null;
-
-  return fetchApi<Product>(`/api/v1/catalog/products/${publicId}`, {
-    method: "PATCH",
-    body: JSON.stringify(cleanPayload),
-  });
+  const response = await apiClient.patch<Product>(
+    `/api/v1/catalog/products/${publicId}`,
+    payload
+  );
+  return response.data;
 }
 
 export async function deleteProduct(publicId: string): Promise<null> {
-  return fetchApi<null>(`/api/v1/catalog/products/${publicId}`, {
-    method: "DELETE",
-  });
+  const response = await apiClient.delete<null>(`/api/v1/catalog/products/${publicId}`);
+  return response.data;
 }
-
-/**
- * ============================================================================
- * PRODUCT IMAGE PIPELINE (/api/v1/catalog/product-images)
- * ============================================================================
- */
 
 export async function uploadProductImage(
-  productId: number,
+  productId: number | string,
   file: File,
   altText?: string,
-  displayOrder: number = 0,
-  isPrimary: boolean = false
+  isPrimary: boolean = false,
+  displayOrder: number = 0
 ): Promise<ProductImage> {
+  const cleanId = typeof productId === "string" ? parseInt(productId, 10) : productId;
+  if (!cleanId || isNaN(cleanId)) {
+    throw new Error(`Invalid numeric product ID provided for image upload: ${productId}`);
+  }
+
   const formData = new FormData();
-  formData.append("product_id", String(productId));
+  formData.append("product_id", String(cleanId));
   formData.append("file", file);
   if (altText) formData.append("alt_text", altText);
+  formData.append("is_primary", isPrimary ? "true" : "false");
   formData.append("display_order", String(displayOrder));
-  formData.append("is_primary", String(isPrimary));
 
-  return fetchApi<ProductImage>("/api/v1/catalog/product-images", {
-    method: "POST",
-    body: formData,
-  });
-}
-
-export async function createProductImage(payload: {
-  product_id: number;
-  file?: File;
-  image_url?: string;
-  alt_text?: string;
-  display_order?: number;
-  is_primary?: boolean;
-}): Promise<ProductImage> {
-  if (payload.file) {
-    return uploadProductImage(
-      payload.product_id,
-      payload.file,
-      payload.alt_text,
-      payload.display_order ?? 0,
-      payload.is_primary ?? false
-    );
-  }
-  throw new Error("Direct binary file upload required by backend Cloudinary service.");
-}
-
-export async function getProductImages(productId: number): Promise<ProductImage[]> {
-  if (!productId) return [];
-  return fetchApi<ProductImage[]>(
-    `/api/v1/catalog/product-images?product_id=${productId}`,
-    { skipAuth: true }
+  const response = await apiClient.post<ProductImage>(
+    "/api/v1/catalog/product-images",
+    formData
   );
+
+  return response.data;
 }
 
 export async function getProductImageById(publicId: string): Promise<ProductImage> {
-  return fetchApi<ProductImage>(`/api/v1/catalog/product-images/${publicId}`, {
-    skipAuth: true,
-  });
+  const response = await apiClient.get<ProductImage>(
+    `/api/v1/catalog/product-images/${publicId}`
+  );
+  return response.data;
 }
 
 export async function setPrimaryProductImage(publicId: string): Promise<ProductImage> {
-  return fetchApi<ProductImage>(`/api/v1/catalog/product-images/${publicId}/primary`, {
-    method: "PATCH",
-  });
+  const response = await apiClient.patch<ProductImage>(
+    `/api/v1/catalog/product-images/${publicId}/primary`
+  );
+  return response.data;
 }
 
-export async function deleteProductImage(publicId: string): Promise<null> {
-  return fetchApi<null>(`/api/v1/catalog/product-images/${publicId}`, {
-    method: "DELETE",
-  });
-}
-
-/**
- * ============================================================================
- * CATEGORIES ENDPOINTS (Public Storefront Reads Use skipAuth: true)
- * ============================================================================
- */
-
-export async function getCategories(
-  page: number = 1,
-  pageSize: number = 50,
-  isActive: boolean = true
-): Promise<CategoryListResponse> {
-  const params = new URLSearchParams({
-    page: String(page),
-    page_size: String(pageSize),
-    is_active: String(isActive),
-  });
-
-  const data = await fetchApi<any>(`/api/v1/catalog/categories?${params.toString()}`, {
-    skipAuth: true,
-  });
-
-  if (Array.isArray(data)) {
-    return { items: data, total: data.length, page: 1, page_size: pageSize };
-  }
-
-  return {
-    items: data.items || [],
-    total: data.total ?? (data.items ? data.items.length : 0),
-    page: data.page ?? page,
-    page_size: data.page_size ?? pageSize,
-  };
-}
-
-export async function getCategoryByPublicId(publicId: string): Promise<Category> {
-  return fetchApi<Category>(`/api/v1/catalog/categories/${publicId}`, {
-    skipAuth: true,
-  });
+export async function deleteProductImage(publicId: string): Promise<void> {
+  await apiClient.delete(`/api/v1/catalog/product-images/${publicId}`);
 }
 
 export async function createCategory(payload: CategoryPayload): Promise<Category> {
-  return fetchApi<Category>("/api/v1/catalog/categories", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiClient.post<Category>("/api/v1/catalog/categories", payload);
+  return response.data;
 }
 
 export async function updateCategory(
   publicId: string,
   payload: Partial<CategoryPayload>
 ): Promise<Category> {
-  return fetchApi<Category>(`/api/v1/catalog/categories/${publicId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiClient.patch<Category>(
+    `/api/v1/catalog/categories/${publicId}`,
+    payload
+  );
+  return response.data;
 }
 
 export async function deleteCategory(publicId: string): Promise<null> {
-  return fetchApi<null>(`/api/v1/catalog/categories/${publicId}`, {
-    method: "DELETE",
-  });
-}
-
-/**
- * ============================================================================
- * SUBCATEGORIES ENDPOINTS (Public Storefront Reads Use skipAuth: true)
- * ============================================================================
- */
-
-export async function getSubcategoriesByCategory(
-  categoryPublicId: string,
-  activeOnly: boolean = true
-): Promise<Subcategory[]> {
-  if (!categoryPublicId) return [];
-  try {
-    const data = await fetchApi<any>(
-      `/api/v1/catalog/subcategories/category/${categoryPublicId}?active_only=${activeOnly}`,
-      { skipAuth: true }
-    );
-    return Array.isArray(data) ? data : data.items || [];
-  } catch (err) {
-    console.warn(`Could not load subcategories for category [${categoryPublicId}]:`, err);
-    return [];
-  }
-}
-
-export async function getSubcategoryByPublicId(publicId: string): Promise<Subcategory> {
-  return fetchApi<Subcategory>(`/api/v1/catalog/subcategories/${publicId}`, {
-    skipAuth: true,
-  });
+  const response = await apiClient.delete<null>(`/api/v1/catalog/categories/${publicId}`);
+  return response.data;
 }
 
 export async function createSubcategory(payload: SubcategoryPayload): Promise<Subcategory> {
-  return fetchApi<Subcategory>("/api/v1/catalog/subcategories", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiClient.post<Subcategory>(
+    "/api/v1/catalog/subcategories",
+    payload
+  );
+  return response.data;
 }
 
 export async function updateSubcategory(
   publicId: string,
   payload: Partial<SubcategoryPayload>
 ): Promise<Subcategory> {
-  return fetchApi<Subcategory>(`/api/v1/catalog/subcategories/${publicId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiClient.patch<Subcategory>(
+    `/api/v1/catalog/subcategories/${publicId}`,
+    payload
+  );
+  return response.data;
 }
 
 export async function deleteSubcategory(publicId: string): Promise<null> {
-  return fetchApi<null>(`/api/v1/catalog/subcategories/${publicId}`, {
-    method: "DELETE",
-  });
+  const response = await apiClient.delete<null>(
+    `/api/v1/catalog/subcategories/${publicId}`
+  );
+  return response.data;
 }

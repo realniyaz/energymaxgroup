@@ -174,7 +174,7 @@ export default function ProfessionalOverviewSection() {
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
               <Link
-                href="/about/science"
+                href="/science"
                 className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all shadow-xl shadow-[#2D5A1E]/20 inline-flex items-center justify-center space-x-2 group shrink-0"
               >
                 <span>Discover Science</span>

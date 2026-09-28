@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { CustomerAuthProvider } from "@/context/customer-auth-context";
+import { CartProvider } from "@/context/cart-context";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://energymaxgroup.in"),
@@ -73,7 +74,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-brand-ivory text-brand-charcoal antialiased selection:bg-brand-green selection:text-white">
         <CustomerAuthProvider>
+          <CartProvider>
         {children}
+        </CartProvider>
         </CustomerAuthProvider>
       </body>
     </html>

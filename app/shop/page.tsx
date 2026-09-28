@@ -1,3 +1,4 @@
+// app/shop/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -14,10 +15,12 @@ import {
   Star,
   Search,
   X,
-  Layers
+  Layers,
+  ShoppingBag,
+  CheckCircle2
 } from "lucide-react";
-import LuxuryNavbar from "../components/Navbar";
-import LuxuryFooter from "../components/LuxuryFooter";
+import LuxuryNavbar from "@/app/components/Navbar";
+import LuxuryFooter from "@/app/components/LuxuryFooter";
 import { 
   getProducts, 
   getCategories, 
@@ -26,8 +29,11 @@ import {
   Category, 
   Subcategory 
 } from "@/lib/services/productService";
+import { useCart } from "@/context/cart-context";
 
 export default function LuxuryShopPage() {
+  const { addItem, loading: cartLoading } = useCart();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -41,6 +47,7 @@ export default function LuxuryShopPage() {
   const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "newest">("featured");
   const [visibleCount, setVisibleCount] = useState<number>(9);
   const [wishlist, setWishlist] = useState<string[]>([]);
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -52,7 +59,7 @@ export default function LuxuryShopPage() {
 
         const [productRes, categoryRes] = await Promise.all([
           getProducts(1, 100, undefined, true),
-          getCategories(1, 50, true).catch(() => ({ items: [], total: 0, page: 1, page_size: 50 }))
+          getCategories(1, 50).catch(() => ({ items: [], total: 0, page: 1, page_size: 50 }))
         ]);
 
         if (!isMounted) return;
@@ -68,7 +75,7 @@ export default function LuxuryShopPage() {
         setCategories(catList);
 
         const subResults = await Promise.allSettled(
-          catList.map((c) => getSubcategoriesByCategory(c.public_id, true))
+          catList.map((c) => getSubcategoriesByCategory(c.public_id))
         );
 
         const accumulatedSubs: Subcategory[] = [];
@@ -113,6 +120,19 @@ export default function LuxuryShopPage() {
     );
   };
 
+  const handleQuickAdd = async (e: React.MouseEvent, productPublicId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAddingId(productPublicId);
+    try {
+      await addItem(productPublicId, 1);
+    } catch (err) {
+      console.error("Quick add failed:", err);
+    } finally {
+      setAddingId(null);
+    }
+  };
+
   const filteredProducts = useMemo(() => {
     return products
       .filter((item) => {
@@ -154,7 +174,7 @@ export default function LuxuryShopPage() {
           return (Number(b.price) || 0) - (Number(a.price) || 0);
         }
         if (sortBy === "newest") {
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         }
         if (a.is_featured && !b.is_featured) return -1;
         if (!a.is_featured && b.is_featured) return 1;
@@ -223,8 +243,9 @@ export default function LuxuryShopPage() {
             />
             {searchQuery && (
               <button 
+                type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#172B15]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#172B15] cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -241,7 +262,7 @@ export default function LuxuryShopPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-semibold text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                className="px-3 py-2 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-semibold text-[#172B15] focus:outline-none focus:border-[#639E1F] cursor-pointer"
               >
                 <option value="featured">Featured First</option>
                 <option value="price-asc">Price: Low to High</option>
@@ -258,12 +279,13 @@ export default function LuxuryShopPage() {
             {filterTabs.map((cat) => (
               <button
                 key={cat}
+                type="button"
                 onClick={() => {
                   setSelectedCategory(cat);
                   setSelectedSubcategoryId(null);
                   setVisibleCount(9);
                 }}
-                className={`px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all duration-300 shrink-0 ${
+                className={`px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all duration-300 shrink-0 cursor-pointer ${
                   selectedCategory === cat
                     ? "bg-[#2D5A1E] text-white shadow-md shadow-[#2D5A1E]/20"
                     : "bg-white text-neutral-600 border border-[#2D5A1E]/15 hover:border-[#639E1F] hover:text-[#172B15]"
@@ -283,8 +305,9 @@ export default function LuxuryShopPage() {
               </span>
 
               <button
+                type="button"
                 onClick={() => setSelectedSubcategoryId(null)}
-                className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all shrink-0 ${
+                className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
                   selectedSubcategoryId === null
                     ? "bg-[#8CC63F] text-[#172B15] font-bold shadow-sm"
                     : "bg-white text-neutral-600 border border-neutral-200 hover:border-[#639E1F]"
@@ -296,8 +319,9 @@ export default function LuxuryShopPage() {
               {activeSubcategories.map((sub) => (
                 <button
                   key={sub.public_id}
+                  type="button"
                   onClick={() => setSelectedSubcategoryId(sub.id)}
-                  className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all shrink-0 ${
+                  className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
                     selectedSubcategoryId === sub.id
                       ? "bg-[#8CC63F] text-[#172B15] font-bold shadow-sm"
                       : "bg-white text-neutral-600 border border-neutral-200 hover:border-[#639E1F]"
@@ -324,11 +348,12 @@ export default function LuxuryShopPage() {
         {error && !loading && (
           <div className="max-w-md mx-auto p-8 rounded-3xl bg-white border border-[#2D5A1E]/15 text-center space-y-4 shadow-sm">
             <ShieldCheck className="w-8 h-8 text-[#2D5A1E] mx-auto" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-[#172B15]">Boutique Notice</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#172B15]">Notice</h3>
             <p className="text-xs text-neutral-600 leading-relaxed">{error}</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="px-6 py-2.5 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-sm"
+              className="px-6 py-2.5 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-sm cursor-pointer"
             >
               Refresh Collection
             </button>
@@ -346,12 +371,13 @@ export default function LuxuryShopPage() {
                   We could not find any active items matching your search or filters.
                 </p>
                 <button
+                  type="button"
                   onClick={() => {
                     setSelectedCategory("All");
                     setSelectedSubcategoryId(null);
                     setSearchQuery("");
                   }}
-                  className="px-5 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-sm cursor-pointer"
                 >
                   Clear All Filters
                 </button>
@@ -372,6 +398,7 @@ export default function LuxuryShopPage() {
                       : 0;
 
                     const isWishlisted = wishlist.includes(product.public_id);
+                    const isItemAdding = addingId === product.public_id;
 
                     return (
                       <motion.div
@@ -383,7 +410,10 @@ export default function LuxuryShopPage() {
                         className="bg-white rounded-3xl border border-[#2D5A1E]/15 overflow-hidden shadow-sm hover:shadow-2xl hover:border-[#8CC63F]/50 transition-all duration-500 flex flex-col justify-between group"
                       >
                         {/* Image Frame */}
-                        <div className="relative h-72 sm:h-80 bg-[#FAFAF7] overflow-hidden p-6 flex items-center justify-center border-b border-neutral-100">
+                        <Link 
+                          href={`/shop/${product.slug || product.public_id}`}
+                          className="relative h-72 sm:h-80 bg-[#FAFAF7] overflow-hidden p-6 flex items-center justify-center border-b border-neutral-100 block"
+                        >
                           <div className="absolute inset-0 bg-[#8CC63F]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                           
                           <Image
@@ -411,9 +441,13 @@ export default function LuxuryShopPage() {
 
                           <button 
                             type="button"
-                            onClick={() => toggleWishlist(product.public_id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleWishlist(product.public_id);
+                            }}
                             aria-label="Add to wishlist"
-                            className={`absolute top-4 right-4 w-9 h-9 rounded-full border flex items-center justify-center shadow-sm transition-all z-10 ${
+                            className={`absolute top-4 right-4 w-9 h-9 rounded-full border flex items-center justify-center shadow-sm transition-all z-10 cursor-pointer ${
                               isWishlisted 
                                 ? "bg-red-50 border-red-200 text-red-500" 
                                 : "bg-white/90 border-[#2D5A1E]/15 text-[#2D5A1E] hover:bg-[#2D5A1E] hover:text-white"
@@ -421,7 +455,7 @@ export default function LuxuryShopPage() {
                           >
                             <Heart className={`w-4 h-4 ${isWishlisted ? "fill-current" : ""}`} />
                           </button>
-                        </div>
+                        </Link>
 
                         {/* Details */}
                         <div className="p-6 sm:p-8 space-y-5 flex-1 flex flex-col justify-between">
@@ -429,15 +463,17 @@ export default function LuxuryShopPage() {
                             <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
                               {product.brand_name || "EnergyMax"}
                             </span>
-                            <h3 className="text-lg font-light text-[#172B15] tracking-tight group-hover:text-[#2D5A1E] transition-colors line-clamp-1">
-                              {product.name}
-                            </h3>
+                            <Link href={`/shop/${product.slug || product.public_id}`}>
+                              <h3 className="text-lg font-light text-[#172B15] tracking-tight group-hover:text-[#2D5A1E] transition-colors line-clamp-1">
+                                {product.name}
+                              </h3>
+                            </Link>
                             <p className="text-xs text-neutral-600 line-clamp-2 leading-relaxed font-normal">
                               {product.short_description || product.description || "Clinically engineered to restore balance, enhance cellular wellness, and optimize daily vitality."}
                             </p>
                           </div>
 
-                          <div className="pt-4 border-t border-neutral-100 flex items-center justify-between">
+                          <div className="pt-4 border-t border-neutral-100 flex items-center justify-between gap-2">
                             <div className="space-y-0.5">
                               <span className="text-[9px] uppercase font-bold tracking-widest text-neutral-400 block">
                                 Investment
@@ -454,13 +490,30 @@ export default function LuxuryShopPage() {
                               </div>
                             </div>
 
-                            <Link
-                              href={`/shop/${product.slug || product.public_id}`}
-                              className="px-5 py-2.5 rounded-xl bg-[#2D5A1E] text-white text-[11px] font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center space-x-1.5 shadow-md shadow-[#2D5A1E]/10"
-                            >
-                              <span>Explore</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </Link>
+                            <div className="flex items-center space-x-2">
+                              {/* Quick Add to Bag */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleQuickAdd(e, product.public_id)}
+                                disabled={isItemAdding || cartLoading}
+                                title="Add to Bag"
+                                className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/20 text-[#2D5A1E] hover:bg-[#F2F8ED] hover:border-[#639E1F] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                              >
+                                {isItemAdding ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-[#2D5A1E]" />
+                                ) : (
+                                  <ShoppingBag className="w-4 h-4" />
+                                )}
+                              </button>
+
+                              <Link
+                                href={`/shop/${product.slug || product.public_id}`}
+                                className="px-4 py-2.5 rounded-xl bg-[#2D5A1E] text-white text-[11px] font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center space-x-1.5 shadow-md shadow-[#2D5A1E]/10"
+                              >
+                                <span>Inspect</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
                           </div>
                         </div>
                       </motion.div>
@@ -471,8 +524,9 @@ export default function LuxuryShopPage() {
                 {visibleCount < filteredProducts.length && (
                   <div className="text-center pt-8">
                     <button
+                      type="button"
                       onClick={handleLoadMore}
-                      className="px-8 py-3.5 rounded-2xl bg-white border border-[#2D5A1E]/30 text-[#2D5A1E] text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] hover:text-white transition-all shadow-sm inline-flex items-center space-x-2"
+                      className="px-8 py-3.5 rounded-2xl bg-white border border-[#2D5A1E]/30 text-[#2D5A1E] text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] hover:text-white transition-all shadow-sm inline-flex items-center space-x-2 cursor-pointer"
                     >
                       <span>Load More Products</span>
                       <ArrowRight className="w-3.5 h-3.5" />

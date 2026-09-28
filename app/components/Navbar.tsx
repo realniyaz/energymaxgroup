@@ -21,11 +21,13 @@ import {
   AlertCircle,
   Sparkles,
   Loader2,
-  ExternalLink,
+  ArrowBigRight,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCustomerAuth } from "@/context/customer-auth-context";
+import { useCart } from "@/context/cart-context";
+import CartDrawer from "./cart/CartDrawer";
 
 // Demographic Collections for Products Dropdown
 const productCategories = [
@@ -58,6 +60,7 @@ const productCategories = [
 
 export default function LuxuryNavbar() {
   const { customer, logout } = useCustomerAuth();
+  const { totalItems, setIsOpen: setCartOpen } = useCart();
 
   // Navigation UI states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -67,7 +70,6 @@ export default function LuxuryNavbar() {
   // Delivery Pincode Modal states
   const [isPincodeModalOpen, setIsPincodeModalOpen] = useState(false);
   const [pincode, setPincode] = useState("");
-  const [pincodeCity, setPincodeCity] = useState("");
   const [activePincode, setActivePincode] = useState<string | null>(null);
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
   const [pincodeError, setPincodeError] = useState<string | null>(null);
@@ -110,7 +112,6 @@ export default function LuxuryNavbar() {
 
     setPincodeLoading(true);
     try {
-      // Optional: Call free postal PIN lookup or serviceability checker
       const res = await fetch(`https://api.postalpincode.in/pincode/${cleanPin}`);
       const data = await res.json();
 
@@ -126,7 +127,6 @@ export default function LuxuryNavbar() {
         setIsPincodeModalOpen(false);
         setPincode("");
       } else {
-        // Fallback for valid 6-digit custom PIN
         setActivePincode(cleanPin);
         setActiveLocation("Standard Express Hub");
         localStorage.setItem("em_delivery_pincode", cleanPin);
@@ -135,7 +135,6 @@ export default function LuxuryNavbar() {
         setPincode("");
       }
     } catch {
-      // Offline / Network fallback
       setActivePincode(cleanPin);
       setActiveLocation("Express Shipping Area");
       localStorage.setItem("em_delivery_pincode", cleanPin);
@@ -156,7 +155,7 @@ export default function LuxuryNavbar() {
 
   return (
     <>
-      <header className="w-full sticky top-0 z-50 shadow-sm font-sans">
+      <header className="w-full sticky top-0 z-40 shadow-sm font-sans">
         {/* =========================================================
             TIER 1: TOP UTILITY BAR (Deep Forest Tone)
            ========================================================= */}
@@ -164,14 +163,14 @@ export default function LuxuryNavbar() {
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             {/* Left Utility Links */}
             <div className="hidden md:flex items-center space-x-6">
-              <a href="#resources" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
-                <Download className="w-3.5 h-3.5 text-[#8CC63F]" />
-                <span className="font-medium tracking-wider uppercase text-[10px]">Resources & Downloads</span>
+              <a href="/privacy-policy" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
+                <ArrowBigRight className="w-3.5 h-3.5 text-[#8CC63F]" />
+                <span className="font-medium tracking-wider uppercase text-[10px]">Privacy Policy</span>
               </a>
               <span className="text-white/20">&bull;</span>
-              <a href="#library" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
+              <a href="/terms-and-conditions" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
                 <BookOpen className="w-3.5 h-3.5 text-[#8CC63F]" />
-                <span className="font-medium tracking-wider uppercase text-[10px]">Content Library</span>
+                <span className="font-medium tracking-wider uppercase text-[10px]">Terms of Service</span>
               </a>
               <span className="text-white/20">&bull;</span>
               <Link href="/about-us" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
@@ -259,6 +258,22 @@ export default function LuxuryNavbar() {
                         </div>
 
                         <div className="space-y-0.5 py-1 text-xs">
+                          <Link
+                            href="/account/profile"
+                            onClick={() => setIsUserMenuOpen(false)}
+                            className="flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors"
+                          >
+                            <User className="w-3.5 h-3.5 text-[#639E1F]" />
+                            <span>My Profile</span>
+                          </Link>
+                          <Link
+                            href="/account/addresses"
+                            onClick={() => setIsUserMenuOpen(false)}
+                            className="flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-[#639E1F]" />
+                            <span>Saved Delivery Addresses</span>
+                          </Link>
                           <Link
                             href="/shop/account/orders"
                             onClick={() => setIsUserMenuOpen(false)}
@@ -412,7 +427,7 @@ export default function LuxuryNavbar() {
               </a>
             </nav>
 
-            {/* Search Bar & Cart Trigger */}
+            {/* Search Bar & Dynamic Cart Drawer Trigger */}
             <div className="flex items-center space-x-3 sm:space-x-5">
               <div className="hidden md:flex items-center relative">
                 <input
@@ -428,16 +443,20 @@ export default function LuxuryNavbar() {
                 </button>
               </div>
 
-              <Link
-                href="/shop"
-                aria-label="Shopping Cart"
-                className="relative p-2.5 rounded-full bg-[#2D5A1E]/5 hover:bg-[#2D5A1E]/10 text-[#172B15] transition-colors"
+              {/* Reactive Shopping Bag Button */}
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                aria-label="Open Shopping Bag"
+                className="relative p-2.5 rounded-full bg-[#2D5A1E]/5 hover:bg-[#2D5A1E]/10 text-[#172B15] transition-all cursor-pointer"
               >
-                <ShoppingBag className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
-                <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 rounded-full bg-[#639E1F] text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
-                  1
-                </span>
-              </Link>
+                <ShoppingBag className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-[#172B15]" />
+                {mounted && totalItems > 0 && (
+                  <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 rounded-full bg-[#8CC63F] text-[#172B15] text-[9px] font-bold flex items-center justify-center shadow-md animate-pulse">
+                    {totalItems}
+                  </span>
+                )}
+              </button>
 
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -473,17 +492,35 @@ export default function LuxuryNavbar() {
 
               {/* Customer Account Indicator for Mobile */}
               {customer ? (
-                <div className="p-3.5 bg-white rounded-2xl border border-[#2D5A1E]/15 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-[#639E1F] tracking-wider block">Logged In As</span>
-                    <span className="text-xs font-bold text-[#172B15]">{customer.first_name} {customer.last_name || ""}</span>
+                <div className="p-3.5 bg-white rounded-2xl border border-[#2D5A1E]/15 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-[#639E1F] tracking-wider block">Logged In As</span>
+                      <span className="text-xs font-bold text-[#172B15]">{customer.first_name} {customer.last_name || ""}</span>
+                    </div>
+                    <button
+                      onClick={() => logout()}
+                      className="px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-[10px] font-bold uppercase"
+                    >
+                      Logout
+                    </button>
                   </div>
-                  <button
-                    onClick={() => logout()}
-                    className="px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-[10px] font-bold uppercase"
-                  >
-                    Logout
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-neutral-100 text-[11px] font-semibold text-[#172B15]">
+                    <Link
+                      href="/account/profile"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="p-2 rounded-xl bg-[#FAFAF7] border border-neutral-200 text-center"
+                    >
+                      My Profile
+                    </Link>
+                    <Link
+                      href="/account/addresses"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="p-2 rounded-xl bg-[#FAFAF7] border border-neutral-200 text-center"
+                    >
+                      Addresses
+                    </Link>
+                  </div>
                 </div>
               ) : (
                 <Link
@@ -537,7 +574,7 @@ export default function LuxuryNavbar() {
                     {activePincode ? `Deliver to: ${activePincode} (${activeLocation})` : "Select delivery address"}
                   </span>
                 </button>
-                <Link href="/help" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-left">
+                <Link href="/help-centre" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-2 text-left">
                   <HelpCircle className="w-4 h-4 text-[#639E1F]" />
                   <span className="font-medium">Help Centre</span>
                 </Link>
@@ -547,13 +584,15 @@ export default function LuxuryNavbar() {
         </AnimatePresence>
       </header>
 
+      {/* Global Slide-Over Cart Drawer */}
+      <CartDrawer />
+
       {/* =========================================================
           DELIVERY PINCODE SELECTION MODAL
          ========================================================= */}
       <AnimatePresence>
         {isPincodeModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -562,7 +601,6 @@ export default function LuxuryNavbar() {
               className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             />
 
-            {/* Modal Card */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -570,7 +608,6 @@ export default function LuxuryNavbar() {
               transition={{ duration: 0.2 }}
               className="relative w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-[#2D5A1E]/20 text-[#172B15] z-10 space-y-6"
             >
-              {/* Modal Header */}
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#8CC63F]/20 text-[#2D5A1E] text-[10px] font-bold uppercase tracking-wider">
@@ -593,7 +630,6 @@ export default function LuxuryNavbar() {
                 </button>
               </div>
 
-              {/* Current Active Pin Tag */}
               {activePincode && (
                 <div className="p-3.5 rounded-2xl bg-[#F2F8ED] border border-[#8CC63F]/30 flex items-center justify-between">
                   <div className="flex items-center space-x-2.5">
@@ -617,7 +653,6 @@ export default function LuxuryNavbar() {
                 </div>
               )}
 
-              {/* Form Input */}
               <form onSubmit={handlePincodeSubmit} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
@@ -645,7 +680,7 @@ export default function LuxuryNavbar() {
                 )}
 
                 <div className="flex items-center space-x-3 pt-1">
-                  <button suppressHydrationWarning
+                  <button
                     type="submit"
                     disabled={pincodeLoading || pincode.length < 6}
                     className="flex-1 py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer shadow-md"
@@ -659,7 +694,7 @@ export default function LuxuryNavbar() {
                       <span>Apply Pincode</span>
                     )}
                   </button>
-                  <button suppressHydrationWarning
+                  <button
                     type="button"
                     onClick={() => setIsPincodeModalOpen(false)}
                     className="px-5 py-3.5 rounded-2xl bg-neutral-100 text-neutral-600 text-xs font-bold uppercase hover:bg-neutral-200 transition-colors"
@@ -669,7 +704,6 @@ export default function LuxuryNavbar() {
                 </div>
               </form>
 
-              {/* Delivery Guarantee Notes */}
               <div className="text-[11px] text-neutral-500 border-t border-neutral-100 pt-3 space-y-1">
                 <p>• Temperature-controlled cold chain for 1 Trillion CFU batches.</p>
                 <p>• Free express delivery available for qualifying orders.</p>

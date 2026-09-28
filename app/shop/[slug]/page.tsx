@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ArrowLeft, 
   Sparkles, 
   Check, 
   ShieldCheck, 
@@ -24,12 +23,9 @@ import {
   Maximize2, 
   X, 
   ChevronRight, 
-  FileText, 
-  Award, 
-  Layers, 
-  Activity,
-  IndianRupee,
-  Leaf
+  Leaf,
+  ArrowRight,
+  Loader2
 } from "lucide-react";
 import LuxuryNavbar from "@/app/components/Navbar";
 import LuxuryFooter from "@/app/components/LuxuryFooter";
@@ -39,11 +35,16 @@ import {
   Product, 
   ProductImage 
 } from "@/lib/services/productService";
+import { useCart } from "@/context/cart-context";
+import { useCustomerAuth } from "@/context/customer-auth-context";
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const slugParam = params?.slug as string;
+
+  const { addItem, loading: cartLoading } = useCart();
+  const { isAuthenticated } = useCustomerAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [images, setImages] = useState<ProductImage[]>([]);
@@ -56,6 +57,9 @@ export default function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "science" | "usage" | "compliance">("overview");
   const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [isAdding, setIsAdding] = useState<boolean>(false);
+  const [isExpressCheckingOut, setIsExpressCheckingOut] = useState<boolean>(false);
+  const [actionSuccess, setActionSuccess] = useState<boolean>(false);
 
   // 1. Data Ingestion: Resolve product by UUID public_id or fallback slug matching
   useEffect(() => {
@@ -68,8 +72,6 @@ export default function ProductDetailPage() {
         setError(null);
 
         let targetProduct: Product | null = null;
-
-        // Try direct fetch if slugParam matches UUID shape
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugParam);
         
         if (isUUID) {
@@ -80,9 +82,8 @@ export default function ProductDetailPage() {
           }
         }
 
-        // Fallback: Query active catalog list and resolve matching slug or public_id
         if (!targetProduct) {
-          const listRes = await getProducts(1, 100, undefined, true);
+          const listRes = await getProducts(1, 100);
           const found = listRes.items?.find(
             (p) => p.slug === slugParam || p.public_id === slugParam
           );
@@ -99,7 +100,6 @@ export default function ProductDetailPage() {
 
         setProduct(targetProduct);
 
-        // Sort images with primary first, followed by display_order
         const imgs = targetProduct.images || [];
         const sortedImages = [...imgs].sort((a, b) => {
           if (a.is_primary && !b.is_primary) return -1;
@@ -150,10 +150,44 @@ export default function ProductDetailPage() {
     }
   };
 
-  // 4. WhatsApp Direct Concierge Order
+  // 4. E-Commerce Cart Connection
+ const handleAddToCart = async () => {
+  if (!product) return;
+  setIsAdding(true);
+  try {
+    // Pass only product.public_id and quantity
+    await addItem(product.public_id, quantity);
+    setActionSuccess(true);
+    setTimeout(() => setActionSuccess(false), 2500);
+  } catch (err) {
+    console.error("Cart dispatch failed:", err);
+  } finally {
+    setIsAdding(false);
+  }
+};
+
+  // 5. Direct Express Checkout Flow
+const handleDirectCheckout = async () => {
+  if (!product) return;
+  setIsExpressCheckingOut(true);
+  try {
+    // Pass only product.public_id and quantity
+    await addItem(product.public_id, quantity);
+    if (isAuthenticated) {
+      router.push("/checkout");
+    } else {
+      router.push("/shop/auth/login?redirect=/checkout");
+    }
+  } catch (err) {
+    console.error("Express checkout failed:", err);
+    setIsExpressCheckingOut(false);
+  }
+};
+
+  // 6. WhatsApp Direct Concierge Order
   const handleWhatsAppInquiry = () => {
     if (!product) return;
-    const phone = "919876543210"; // Official EnergyMax concierge desk
+    const phone = "919451444406";
     const message = encodeURIComponent(
       `Hello EnergyMax Concierge, I would like to inquire/order:\n\n*Product:* ${product.name}\n*SKU / Slug:* ${product.slug}\n*Price:* ₹${numericPrice.toLocaleString("en-IN")}\n*Quantity:* ${quantity} unit(s)\n*Total Value:* ₹${(numericPrice * quantity).toLocaleString("en-IN")}\n\nPlease confirm availability and dispatch procedures.`
     );
@@ -244,8 +278,9 @@ export default function ProductDetailPage() {
 
               {/* Lightbox Trigger Button */}
               <button
+                type="button"
                 onClick={() => setIsLightboxOpen(true)}
-                className="absolute top-5 right-5 z-10 w-10 h-10 rounded-full bg-white/90 border border-[#2D5A1E]/15 text-[#172B15] flex items-center justify-center shadow-sm hover:bg-[#2D5A1E] hover:text-white transition-all"
+                className="absolute top-5 right-5 z-10 w-10 h-10 rounded-full bg-white/90 border border-[#2D5A1E]/15 text-[#172B15] flex items-center justify-center shadow-sm hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer"
                 title="Expand Fullscreen"
               >
                 <Maximize2 className="w-4 h-4" />
@@ -276,9 +311,10 @@ export default function ProductDetailPage() {
                   const isSelected = selectedImage === img.image_url;
                   return (
                     <button
+                      type="button"
                       key={img.public_id || idx}
                       onClick={() => setSelectedImage(img.image_url)}
-                      className={`relative aspect-square rounded-2xl bg-white border-2 overflow-hidden p-2 transition-all shadow-sm ${
+                      className={`relative aspect-square rounded-2xl bg-white border-2 overflow-hidden p-2 transition-all shadow-sm cursor-pointer ${
                         isSelected 
                           ? "border-[#8CC63F] ring-2 ring-[#8CC63F]/30 scale-[1.03]" 
                           : "border-neutral-200 hover:border-[#2D5A1E]/40"
@@ -392,8 +428,10 @@ export default function ProductDetailPage() {
               <div className="pt-4 border-t border-neutral-100 flex items-center space-x-4">
                 <div className="flex items-center space-x-2 bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl p-1.5">
                   <button
+                    type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-sm"
+                    disabled={isAdding || isExpressCheckingOut}
+                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-sm cursor-pointer disabled:opacity-40"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -401,8 +439,10 @@ export default function ProductDetailPage() {
                     {quantity}
                   </span>
                   <button
+                    type="button"
                     onClick={() => setQuantity((q) => q + 1)}
-                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-sm"
+                    disabled={isAdding || isExpressCheckingOut}
+                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-sm cursor-pointer disabled:opacity-40"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -411,8 +451,9 @@ export default function ProductDetailPage() {
                 {/* Wishlist & Share buttons */}
                 <div className="flex items-center space-x-2">
                   <button
+                    type="button"
                     onClick={() => setIsWishlisted(!isWishlisted)}
-                    className={`p-3 rounded-2xl border transition-all shadow-sm ${
+                    className={`p-3 rounded-2xl border transition-all shadow-sm cursor-pointer ${
                       isWishlisted 
                         ? "bg-red-50 border-red-200 text-red-500" 
                         : "bg-white border-[#2D5A1E]/15 text-neutral-600 hover:border-[#639E1F]"
@@ -423,8 +464,9 @@ export default function ProductDetailPage() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={handleShare}
-                    className="p-3 rounded-2xl bg-white border border-[#2D5A1E]/15 text-neutral-600 hover:border-[#639E1F] transition-all shadow-sm"
+                    className="p-3 rounded-2xl bg-white border border-[#2D5A1E]/15 text-neutral-600 hover:border-[#639E1F] transition-all shadow-sm cursor-pointer"
                     title="Copy Share Link"
                   >
                     {copiedLink ? <Check className="w-4 h-4 text-green-600" /> : <Share2 className="w-4 h-4" />}
@@ -432,19 +474,58 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* Direct Acquisition Call-to-Actions */}
+              {/* Direct Acquisition & Checkout CTA Buttons */}
               <div className="space-y-3 pt-2">
+                {/* Add to Bag (Opens Drawer) */}
                 <button
-                  onClick={handleWhatsAppInquiry}
-                  className="w-full py-4 px-6 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#234717] transition-all shadow-xl shadow-[#2D5A1E]/20 flex items-center justify-center space-x-2.5"
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={isAdding || isExpressCheckingOut || cartLoading}
+                  className="w-full py-4 px-6 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#234717] transition-all shadow-xl shadow-[#2D5A1E]/20 flex items-center justify-center space-x-2.5 cursor-pointer disabled:opacity-60"
                 >
-                  <ShoppingBag className="w-4 h-4" />
-                  <span>Acquire Now • ₹{(numericPrice * quantity).toLocaleString("en-IN")}</span>
+                  {isAdding ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Adding to Wellness Bag...</span>
+                    </>
+                  ) : actionSuccess ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-[#8CC63F]" />
+                      <span>Added to Bag</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag className="w-4 h-4" />
+                      <span>Add to Bag • ₹{(numericPrice * quantity).toLocaleString("en-IN")}</span>
+                    </>
+                  )}
                 </button>
 
+                {/* Instant Checkout Forwarding */}
                 <button
+                  type="button"
+                  onClick={handleDirectCheckout}
+                  disabled={isAdding || isExpressCheckingOut || cartLoading}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center justify-center space-x-2 shadow-md cursor-pointer disabled:opacity-60"
+                >
+                  {isExpressCheckingOut ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Securing Allocation...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Express Checkout</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+
+                {/* Clinical Concierge Inquiry */}
+                <button
+                  type="button"
                   onClick={handleWhatsAppInquiry}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/20 text-[#2D5A1E] text-xs font-bold uppercase tracking-wider hover:bg-[#F2F8ED] transition-all flex items-center justify-center space-x-2"
+                  className="w-full py-3 px-6 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/20 text-[#2D5A1E] text-xs font-bold uppercase tracking-wider hover:bg-[#F2F8ED] transition-all flex items-center justify-center space-x-2 cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4 text-emerald-600" />
                   <span>Consult Clinical Concierge</span>
@@ -482,9 +563,10 @@ export default function ProductDetailPage() {
               { id: "compliance", label: "Accreditation & Quality" },
             ].map((tab) => (
               <button
+                type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === tab.id
                     ? "bg-[#172B15] text-white shadow-md"
                     : "bg-[#FAFAF7] text-neutral-600 hover:text-[#172B15]"
@@ -579,8 +661,9 @@ export default function ProductDetailPage() {
               className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center"
             >
               <button
+                type="button"
                 onClick={() => setIsLightboxOpen(false)}
-                className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all"
+                className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
                 title="Close Lightbox"
               >
                 <X className="w-6 h-6" />

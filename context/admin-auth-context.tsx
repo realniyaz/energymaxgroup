@@ -1,17 +1,17 @@
-"tsx"
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { apiClient, setAccessToken ,setRefreshToken} from "@/lib/api-client";
+import { apiClient, setAccessToken, setRefreshToken } from "@/lib/api-client";
 import { useRouter } from "next/navigation";
 
-interface AdminUser {
+export interface AdminUser {
   public_id: string;
   username: string;
   staff_type: string;
   is_super_admin: boolean;
   is_active: boolean;
-  role_id: number;
+  role_id?: number;
+  roles?: Array<{ public_id: string; name: string }>;
 }
 
 interface AdminAuthContextType {
@@ -29,36 +29,65 @@ export const AdminAuthProvider = ({ children }: { children: React.ReactNode }) =
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const fetchUser = useCallback(async () => {
-    try {
-      const res = await apiClient.get<AdminUser>("/api/v1/admin/auth/me");
-      setUser(res.data);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+const fetchUser = useCallback(async () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("admin_access_token") : null;
+  
+  if (!token) {
+    setUser(null);
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const res = await apiClient.get<AdminUser>("/api/v1/admin/auth/me", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setUser(res.data);
+  } catch {
+    setAccessToken(null);
+    setUser(null);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
 
   const login = async (username: string, password: string) => {
-    const res = await apiClient.post("/api/v1/admin/auth/login", { username, password });
-    setAccessToken(res.data.access_token);
-    if (res.data.refresh_token) {
-      setRefreshToken(res.data.refresh_token);
+    const res = await apiClient.post("/api/v1/admin/auth/login", { 
+      username: username.trim(), 
+      password 
+    });
+
+    const { access_token, refresh_token } = res.data;
+
+    // Attach token globally to Axios instance
+    setAccessToken(access_token);
+    apiClient.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
+
+    if (refresh_token) {
+      setRefreshToken(refresh_token);
     }
-    await fetchUser();
+
+    // Explicitly pass Authorization header to bypass race conditions
+    const meRes = await apiClient.get<AdminUser>("/api/v1/admin/auth/me", {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    setUser(meRes.data);
     router.push("/admin/dashboard");
   };
 
   const logout = async () => {
     try {
       await apiClient.post("/api/v1/admin/auth/logout");
+    } catch (err) {
+      console.warn("Logout notification failed:", err);
     } finally {
       setAccessToken(null);
+      delete apiClient.defaults.headers.common["Authorization"];
       setUser(null);
       router.push("/admin/login");
     }
@@ -67,8 +96,11 @@ export const AdminAuthProvider = ({ children }: { children: React.ReactNode }) =
   const logoutAll = async () => {
     try {
       await apiClient.post("/api/v1/admin/auth/logout-all");
+    } catch (err) {
+      console.warn("Logout-all notification failed:", err);
     } finally {
       setAccessToken(null);
+      delete apiClient.defaults.headers.common["Authorization"];
       setUser(null);
       router.push("/admin/login");
     }

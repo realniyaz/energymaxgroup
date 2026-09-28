@@ -4,6 +4,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock,
@@ -22,6 +23,10 @@ import {
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
 export default function CustomerLoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect") || "/shop";
+
   const { loginWithPassword, requestOtp, verifyOtp } = useCustomerAuth();
 
   const [authMode, setAuthMode] = useState<"password" | "otp">("password");
@@ -46,9 +51,16 @@ export default function CustomerLoginPage() {
     setLoading(true);
 
     try {
-      await loginWithPassword({ identifier, password });
+      // Passes two discrete string arguments matching CustomerAuthContextType
+      await loginWithPassword(identifier.trim(), password);
+      router.push(redirectUrl);
     } catch (err: any) {
-      setError(err.message || "Invalid customer credentials.");
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Invalid customer credentials."
+      );
     } finally {
       setLoading(false);
     }
@@ -61,11 +73,17 @@ export default function CustomerLoginPage() {
     setLoading(true);
 
     try {
-      await requestOtp(otpEmail, "login");
+      // destination, channel, purpose
+      await requestOtp(otpEmail.trim(), "email", "login");
       setOtpSent(true);
-      setOtpSuccessMsg(`A 6-digit code has been sent to ${otpEmail}.`);
+      setOtpSuccessMsg(`A 6-digit code has been sent to ${otpEmail.trim()}.`);
     } catch (err: any) {
-      setError(err.message || "Unable to dispatch OTP code. Please check your email.");
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Unable to dispatch OTP code. Please check your email."
+      );
     } finally {
       setLoading(false);
     }
@@ -78,9 +96,16 @@ export default function CustomerLoginPage() {
     setLoading(true);
 
     try {
-      await verifyOtp(otpEmail, otpCode, "login");
+      // destination, code, channel, purpose
+      await verifyOtp(otpEmail.trim(), otpCode.trim(), "email", "login");
+      router.push(redirectUrl);
     } catch (err: any) {
-      setError(err.message || "Invalid or expired OTP code.");
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Invalid or expired OTP code."
+      );
     } finally {
       setLoading(false);
     }
@@ -212,9 +237,7 @@ export default function CustomerLoginPage() {
             </p>
           </div>
 
-          {/* =========================================================
-              PARTNER ECOSYSTEM PROMPT (Above the Login Form)
-             ========================================================= */}
+          {/* Partner Ecosystem Prompt */}
           <div className="p-3.5 rounded-2xl bg-[#F2F8ED] border border-[#639E1F]/25 flex items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-xl bg-[#639E1F]/15 text-[#2D5A1E] flex items-center justify-center shrink-0">
