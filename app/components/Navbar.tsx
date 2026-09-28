@@ -174,7 +174,7 @@ export default function LuxuryNavbar() {
                 <span className="font-medium tracking-wider uppercase text-[10px]">Content Library</span>
               </a>
               <span className="text-white/20">&bull;</span>
-              <Link href="/about" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
+              <Link href="/about-us" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
                 <Globe className="w-3.5 h-3.5 text-[#8CC63F]" />
                 <span className="font-medium tracking-wider uppercase text-[10px]">About EnergyMax</span>
               </Link>
@@ -405,10 +405,10 @@ export default function LuxuryNavbar() {
                 Discover Science
               </Link>
               <a
-                href="#promotions"
+                href="/about-us"
                 className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors"
               >
-                Promotions
+                About
               </a>
             </nav>
 
@@ -515,7 +515,7 @@ export default function LuxuryNavbar() {
                 <Link href="/shop" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">
                   Shop
                 </Link>
-                <Link href="/about/science" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">
+                <Link href="/science" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">
                   Discover Science
                 </Link>
                 <a href="#promotions" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">
