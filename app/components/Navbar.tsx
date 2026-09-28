@@ -399,7 +399,7 @@ export default function LuxuryNavbar() {
                 Shop
               </Link>
               <Link
-                href="/about/science"
+                href="/science"
                 className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors"
               >
                 Discover Science
