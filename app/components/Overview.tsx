@@ -1,10 +1,20 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { Sparkles, ArrowRight, Check, ShieldCheck, Activity, ZoomIn, X } from "lucide-react";
+import {
+  Sparkles,
+  ArrowRight,
+  Check,
+  ShieldCheck,
+  Activity,
+  ZoomIn,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 // Auto-sliding images for the left side gallery
 const slideImages = [
@@ -17,7 +27,30 @@ export default function ProfessionalOverviewSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Auto-slide effect every 4.5 seconds (pauses when lightbox modal is open)
+  // Navigation handlers
+  const handlePrev = useCallback(() => {
+    setCurrentIndex((prev) => (prev - 1 + slideImages.length) % slideImages.length);
+  }, []);
+
+  const handleNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % slideImages.length);
+  }, []);
+
+  // Keyboard navigation when modal is open
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") handlePrev();
+      if (e.key === "ArrowRight") handleNext();
+      if (e.key === "Escape") setIsModalOpen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen, handlePrev, handleNext]);
+
+  // Auto-slide effect every 4.5 seconds (pauses when modal is open)
   useEffect(() => {
     if (isModalOpen) return;
     const timer = setInterval(() => {
@@ -36,10 +69,10 @@ export default function ProfessionalOverviewSection() {
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
         
-        {/* Two-Column Layout: Left Auto-Slider | Right Product Details & Overview */}
+        {/* Two-Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
           
-          {/* Left Column: Automated Sliding Image Gallery (Clickable to Zoom) */}
+          {/* Left Column: Automated Sliding Image Gallery */}
           <div className="lg:col-span-6 flex flex-col items-center">
             <div 
               onClick={() => setIsModalOpen(true)}
@@ -47,7 +80,12 @@ export default function ProfessionalOverviewSection() {
             >
               
               {/* Badge & Zoom Indicator Overlay */}
-              
+              <div className="absolute top-5 left-5 z-20 px-3.5 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-[#2D5A1E]/20 shadow-sm flex items-center space-x-1.5">
+                <Sparkles className="w-3 h-3 text-[#639E1F]" />
+                <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#2D5A1E]">
+                  Clinical Architecture
+                </span>
+              </div>
 
               <div className="absolute top-5 right-5 z-20 px-3 py-1.5 rounded-full bg-[#172B15]/80 backdrop-blur-md text-white shadow-sm flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ZoomIn className="w-3.5 h-3.5 text-[#8CC63F]" />
@@ -136,7 +174,7 @@ export default function ProfessionalOverviewSection() {
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
               <Link
-                href="/science"
+                href="/about/science"
                 className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all shadow-xl shadow-[#2D5A1E]/20 inline-flex items-center justify-center space-x-2 group shrink-0"
               >
                 <span>Discover Science</span>
@@ -157,7 +195,7 @@ export default function ProfessionalOverviewSection() {
 
       </div>
 
-      {/* Full-Screen Image Lightbox Modal */}
+      {/* Full-Screen Image Lightbox Modal with Left & Right Toggle */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div
@@ -165,32 +203,92 @@ export default function ProfessionalOverviewSection() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsModalOpen(false)}
-            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-8"
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-8"
           >
+            {/* Modal Container */}
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-5xl h-[80vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center p-4"
+              className="relative w-full max-w-5xl h-[82vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center p-6 sm:p-10"
             >
+              {/* Close Button */}
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="absolute top-4 right-4 z-30 p-2.5 rounded-full bg-[#172B15] text-white hover:bg-[#2D5A1E] transition-colors shadow-lg"
+                className="absolute top-4 right-4 z-30 p-2.5 rounded-full bg-[#172B15] text-white hover:bg-[#2D5A1E] transition-colors shadow-lg cursor-pointer"
                 aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="relative w-full h-full">
-                <Image
-                  src={slideImages[currentIndex].src}
-                  alt={slideImages[currentIndex].alt}
-                  fill
-                  sizes="100vw"
-                  className="object-contain"
-                />
+              {/* Slide Counter & Label Indicator */}
+              <div className="absolute top-4 left-6 z-30 flex items-center space-x-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-[#172B15]/10 text-[#172B15]">
+                  {currentIndex + 1} / {slideImages.length}
+                </span>
+                <span className="text-xs font-semibold text-neutral-600 hidden sm:inline">
+                  {slideImages[currentIndex].alt}
+                </span>
               </div>
+
+              {/* Previous Slide Button */}
+              <button
+                type="button"
+                onClick={handlePrev}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-[#172B15]/80 hover:bg-[#172B15] text-white backdrop-blur-md shadow-xl transition-all cursor-pointer group"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Next Slide Button */}
+              <button
+                type="button"
+                onClick={handleNext}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-[#172B15]/80 hover:bg-[#172B15] text-white backdrop-blur-md shadow-xl transition-all cursor-pointer group"
+                aria-label="Next image"
+              >
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Active High-Res Modal Image */}
+              <div className="relative w-full h-full flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentIndex}
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.04 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative w-full h-full flex items-center justify-center"
+                  >
+                    <Image
+                      src={slideImages[currentIndex].src}
+                      alt={slideImages[currentIndex].alt}
+                      fill
+                      sizes="100vw"
+                      className="object-contain"
+                      priority
+                    />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {/* Modal Thumbnails / Dots Indicator */}
+              <div className="absolute bottom-4 z-30 flex items-center space-x-2">
+                {slideImages.map((_, dotIdx) => (
+                  <button
+                    key={dotIdx}
+                    onClick={() => setCurrentIndex(dotIdx)}
+                    aria-label={`Jump to image ${dotIdx + 1}`}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      currentIndex === dotIdx ? "w-8 bg-[#2D5A1E]" : "w-2 bg-[#2D5A1E]/25"
+                    }`}
+                  />
+                ))}
+              </div>
+
             </motion.div>
           </motion.div>
         )}

@@ -15,6 +15,9 @@ import {
   KeyRound,
   AlertCircle,
   CheckCircle2,
+  Briefcase,
+  ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
@@ -207,6 +210,37 @@ export default function CustomerLoginPage() {
             <p className="text-xs text-neutral-500">
               Welcome back. Choose your preferred authentication method.
             </p>
+          </div>
+
+          {/* =========================================================
+              PARTNER ECOSYSTEM PROMPT (Above the Login Form)
+             ========================================================= */}
+          <div className="p-3.5 rounded-2xl bg-[#F2F8ED] border border-[#639E1F]/25 flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-xl bg-[#639E1F]/15 text-[#2D5A1E] flex items-center justify-center shrink-0">
+                <Briefcase className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-[#172B15] tracking-tight">Looking to build a business?</p>
+                <Link
+                  href="/opportunity"
+                  className="text-[11px] font-medium text-[#2D5A1E] hover:text-[#639E1F] inline-flex items-center space-x-1 group"
+                >
+                  <span>Become a Partner</span>
+                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </Link>
+              </div>
+            </div>
+
+            <a
+              href="https://energymaxgroup.com/cabinet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-xl bg-white border border-[#2D5A1E]/15 text-[#172B15] text-[10px] font-bold uppercase tracking-wider hover:bg-[#172B15] hover:text-white transition-all shadow-sm shrink-0 flex items-center space-x-1"
+            >
+              <span>Partner Sign In</span>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
           </div>
 
           {/* Mode Switcher: Password vs OTP */}

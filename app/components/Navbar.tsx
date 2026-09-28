@@ -210,7 +210,7 @@ export default function LuxuryNavbar() {
               <span className="text-white/20 hidden sm:inline">&bull;</span>
 
               <Link
-                href="/help"
+                href="/help-centre"
                 className="hidden sm:flex items-center space-x-1 hover:text-[#8CC63F] transition-colors cursor-pointer"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-[#8CC63F]" />

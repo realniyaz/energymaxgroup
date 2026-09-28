@@ -111,17 +111,20 @@ export interface SubcategoryListResponse {
   page_size: number;
 }
 
+interface CustomRequestInit extends RequestInit {
+  skipAuth?: boolean;
+}
+
 /**
  * ============================================================================
- * HTTP CLIENT CORE (Token-aware, Error-surfacing)
+ * HTTP CLIENT CORE (Token-aware, Auto-cleans expired tokens)
  * ============================================================================
  */
 
 function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
-  
-  // 1. Direct localStorage keys
-  const directToken = 
+
+  const directToken =
     localStorage.getItem("access_token") ||
     localStorage.getItem("admin_access_token") ||
     localStorage.getItem("token") ||
@@ -130,18 +133,26 @@ function getAuthToken(): string | null {
 
   if (directToken) return directToken;
 
-  // 2. Fallback to auth cookies if tokens are stored in cookies
   try {
     const match = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
     if (match && match[1]) return decodeURIComponent(match[1]);
   } catch {
-    // ignore cookie read errors
+    // Ignore cookie read failures
   }
 
   return null;
 }
 
-async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+function clearAuthTokens(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("admin_access_token");
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("access_token");
+  sessionStorage.removeItem("admin_access_token");
+}
+
+async function fetchApi<T>(endpoint: string, options: CustomRequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAuthToken();
 
@@ -150,8 +161,8 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     ...(options.headers as Record<string, string>),
   };
 
-  // Attach auth bearer header if token exists
-  if (token && !headers["Authorization"]) {
+  // Only attach Authorization if authentication is not explicitly skipped
+  if (!options.skipAuth && token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
@@ -176,6 +187,13 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     } catch {
       errorDetail = await response.text();
     }
+
+    // Auto-purge stale or dead tokens on 401 Unauthorized
+    if (response.status === 401) {
+      console.warn("Session expired or token invalid. Purging stale auth tokens.");
+      clearAuthTokens();
+    }
+
     console.error(`FastAPI Error [${response.status}] at ${endpoint}:`, errorDetail);
     throw new Error(errorDetail || `API Error [${response.status}]: ${response.statusText}`);
   }
@@ -189,7 +207,7 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 
 /**
  * ============================================================================
- * PRODUCT CATALOG ENDPOINTS (/api/v1/catalog/products)
+ * PRODUCT CATALOG ENDPOINTS (Public Storefront Reads Use skipAuth: true)
  * ============================================================================
  */
 
@@ -212,7 +230,10 @@ export async function getProducts(
     params.append("is_active", String(isActive));
   }
 
-  const data = await fetchApi<any>(`/api/v1/catalog/products?${params.toString()}`);
+  // Public storefront endpoint: skipAuth guarantees no 401 crashes
+  const data = await fetchApi<any>(`/api/v1/catalog/products?${params.toString()}`, {
+    skipAuth: true,
+  });
 
   if (Array.isArray(data)) {
     return {
@@ -232,7 +253,9 @@ export async function getProducts(
 }
 
 export async function getProductByPublicId(publicId: string): Promise<Product> {
-  return fetchApi<Product>(`/api/v1/catalog/products/${publicId}`);
+  return fetchApi<Product>(`/api/v1/catalog/products/${publicId}`, {
+    skipAuth: true,
+  });
 }
 
 export async function createProduct(payload: ProductPayload): Promise<Product> {
@@ -296,7 +319,6 @@ export async function uploadProductImage(
   });
 }
 
-// Backward-compatible alias for existing components
 export async function createProductImage(payload: {
   product_id: number;
   file?: File;
@@ -320,12 +342,15 @@ export async function createProductImage(payload: {
 export async function getProductImages(productId: number): Promise<ProductImage[]> {
   if (!productId) return [];
   return fetchApi<ProductImage[]>(
-    `/api/v1/catalog/product-images?product_id=${productId}`
+    `/api/v1/catalog/product-images?product_id=${productId}`,
+    { skipAuth: true }
   );
 }
 
 export async function getProductImageById(publicId: string): Promise<ProductImage> {
-  return fetchApi<ProductImage>(`/api/v1/catalog/product-images/${publicId}`);
+  return fetchApi<ProductImage>(`/api/v1/catalog/product-images/${publicId}`, {
+    skipAuth: true,
+  });
 }
 
 export async function setPrimaryProductImage(publicId: string): Promise<ProductImage> {
@@ -342,7 +367,7 @@ export async function deleteProductImage(publicId: string): Promise<null> {
 
 /**
  * ============================================================================
- * CATEGORIES ENDPOINTS (/api/v1/catalog/categories)
+ * CATEGORIES ENDPOINTS (Public Storefront Reads Use skipAuth: true)
  * ============================================================================
  */
 
@@ -357,7 +382,9 @@ export async function getCategories(
     is_active: String(isActive),
   });
 
-  const data = await fetchApi<any>(`/api/v1/catalog/categories?${params.toString()}`);
+  const data = await fetchApi<any>(`/api/v1/catalog/categories?${params.toString()}`, {
+    skipAuth: true,
+  });
 
   if (Array.isArray(data)) {
     return { items: data, total: data.length, page: 1, page_size: pageSize };
@@ -372,7 +399,9 @@ export async function getCategories(
 }
 
 export async function getCategoryByPublicId(publicId: string): Promise<Category> {
-  return fetchApi<Category>(`/api/v1/catalog/categories/${publicId}`);
+  return fetchApi<Category>(`/api/v1/catalog/categories/${publicId}`, {
+    skipAuth: true,
+  });
 }
 
 export async function createCategory(payload: CategoryPayload): Promise<Category> {
@@ -400,7 +429,7 @@ export async function deleteCategory(publicId: string): Promise<null> {
 
 /**
  * ============================================================================
- * SUBCATEGORIES ENDPOINTS (/api/v1/catalog/subcategories)
+ * SUBCATEGORIES ENDPOINTS (Public Storefront Reads Use skipAuth: true)
  * ============================================================================
  */
 
@@ -411,7 +440,8 @@ export async function getSubcategoriesByCategory(
   if (!categoryPublicId) return [];
   try {
     const data = await fetchApi<any>(
-      `/api/v1/catalog/subcategories/category/${categoryPublicId}?active_only=${activeOnly}`
+      `/api/v1/catalog/subcategories/category/${categoryPublicId}?active_only=${activeOnly}`,
+      { skipAuth: true }
     );
     return Array.isArray(data) ? data : data.items || [];
   } catch (err) {
@@ -421,7 +451,9 @@ export async function getSubcategoriesByCategory(
 }
 
 export async function getSubcategoryByPublicId(publicId: string): Promise<Subcategory> {
-  return fetchApi<Subcategory>(`/api/v1/catalog/subcategories/${publicId}`);
+  return fetchApi<Subcategory>(`/api/v1/catalog/subcategories/${publicId}`, {
+    skipAuth: true,
+  });
 }
 
 export async function createSubcategory(payload: SubcategoryPayload): Promise<Subcategory> {
