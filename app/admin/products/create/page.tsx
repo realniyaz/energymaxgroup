@@ -75,7 +75,7 @@ export default function CreateProductPage() {
     async function loadCategories() {
       try {
         setCategoriesLoading(true);
-        const res = await getCategories(1, 100, true);
+        const res = await getCategories(1, 100);
         const list = res.items || [];
         setCategories(list);
 
@@ -239,8 +239,8 @@ export default function CreateProductPage() {
       const createdProduct = await createProduct({
         ...formData,
         price: Number(formData.price),
-        mrp: formData.mrp ? Number(formData.mrp) : null,
-        cost_price: formData.cost_price ? Number(formData.cost_price) : null,
+        mrp: formData.mrp ? Number(formData.mrp) : undefined,
+        cost_price: formData.cost_price ? Number(formData.cost_price) : undefined,
         subcategory_id: Number(formData.subcategory_id),
       });
 
@@ -254,8 +254,8 @@ export default function CreateProductPage() {
             targetNumericId,
             img.file,
             img.alt_text || formData.name,
-            i,
-            img.is_primary
+            Boolean(img.is_primary), // 4th argument: boolean
+            i                        // 5th argument: number
           );
         }
       }

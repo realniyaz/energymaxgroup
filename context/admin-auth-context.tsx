@@ -80,18 +80,37 @@ const fetchUser = useCallback(async () => {
     router.push("/admin/dashboard");
   };
 
-  const logout = async () => {
-    try {
-      await apiClient.post("/api/v1/admin/auth/logout");
-    } catch (err) {
-      console.warn("Logout notification failed:", err);
-    } finally {
-      setAccessToken(null);
-      delete apiClient.defaults.headers.common["Authorization"];
-      setUser(null);
-      router.push("/admin/login");
+const logout = async () => {
+  try {
+    const refreshToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("admin_refresh_token")
+        : null;
+
+    if (refreshToken) {
+      await apiClient.post(
+        "/api/v1/admin/auth/logout",
+        {}, // empty request body
+        {
+          params: {
+            refresh_token: refreshToken, // sends ?refresh_token=...
+          },
+        }
+      );
     }
-  };
+  } catch (err: any) {
+    console.warn("Backend logout notification failed, continuing local teardown:", err);
+  } finally {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("admin_access_token");
+      localStorage.removeItem("admin_refresh_token");
+      localStorage.removeItem("admin_user");
+    }
+
+    setUser(null);
+    router.push("/admin/login");
+  }
+};
 
   const logoutAll = async () => {
     try {

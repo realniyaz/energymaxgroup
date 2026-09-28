@@ -215,8 +215,8 @@ export default function EditProductPage() {
       const updated = await updateProduct(publicId, {
         ...formData,
         price: Number(formData.price),
-        mrp: formData.mrp ? Number(formData.mrp) : null,
-        cost_price: formData.cost_price ? Number(formData.cost_price) : null,
+        mrp: formData.mrp ? Number(formData.mrp) : undefined,
+        cost_price: formData.cost_price ? Number(formData.cost_price) : undefined,
         subcategory_id: Number(formData.subcategory_id),
         display_order: Number(formData.display_order ?? 0),
       });
@@ -282,8 +282,8 @@ export default function EditProductPage() {
           productId,
           file,
           formData.name || file.name,
+          Boolean(isFirst),
           images.length + idx,
-          isFirst
         );
         newlyUploaded.push(uploaded);
       }

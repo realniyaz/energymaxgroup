@@ -280,7 +280,7 @@ export default function AdminProductsPage() {
                             {product.name}
                           </Link>
                           <div className="text-neutral-400 font-mono text-[10px]">
-                            ID: #{product.id} {product.images?.length > 0 && `• ${product.images.length} photo(s)`}
+                            ID: #{product.id} {(product.images?.length ?? 0) > 0 && `• ${product.images?.length} photo(s)`}
                           </div>
                         </div>
                       </div>
