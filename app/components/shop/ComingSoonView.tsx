@@ -126,7 +126,7 @@ export default function ComingSoonView({
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-neutral-400" />
-                  <input
+                  <input suppressHydrationWarning
                     type="email"
                     required
                     value={email}
