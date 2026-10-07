@@ -19,7 +19,8 @@ import {
   KeyRound,
   ChevronDown,
   User,
-  Settings
+  Settings,
+  ShoppingBag
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
 
@@ -106,6 +107,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
     { href: "/admin/categories", label: "Categories", icon: Network },
     { href: "/admin/products", label: "Product Inventory", icon: Package },
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
+    { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
     { href: "/admin/sessions", label: "Active Sessions", icon: ShieldAlert },
   ];
 
