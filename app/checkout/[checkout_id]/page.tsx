@@ -314,7 +314,7 @@ export default function CheckoutPage({
                   </p>
                 </div>
                 <Link
-                  href="/shop/account/addresses"
+                  href="/account/addresses"
                   className="inline-flex items-center space-x-1 text-xs font-bold text-[#639E1F] hover:underline"
                 >
                   <Plus className="w-3.5 h-3.5" />
