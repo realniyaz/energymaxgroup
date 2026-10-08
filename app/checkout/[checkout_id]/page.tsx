@@ -327,7 +327,7 @@ export default function CheckoutPage({
                   <MapPin className="w-6 h-6 text-neutral-400 mx-auto" />
                   <p className="text-xs text-neutral-500">No delivery addresses found in your account.</p>
                   <Link
-                    href="/shop/account/addresses"
+                    href="/account/addresses"
                     className="inline-block px-5 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider"
                   >
                     Add Address Now
