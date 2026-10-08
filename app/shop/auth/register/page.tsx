@@ -4,6 +4,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   User,
@@ -20,6 +21,7 @@ import {
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
 export default function CustomerRegisterPage() {
+  const router = useRouter();
   const { registerCustomer } = useCustomerAuth();
 
   const [formData, setFormData] = useState({
@@ -43,7 +45,7 @@ export default function CustomerRegisterPage() {
     e.preventDefault();
     setError(null);
 
-    // Validation matching CustomerRegisterRequest Pydantic constraints
+    // Backend validation constraints
     if (!formData.email && !formData.phone) {
       setError("Please provide either an email address or a phone number.");
       return;
@@ -70,8 +72,16 @@ export default function CustomerRegisterPage() {
         phone: formData.phone.trim() || undefined,
         password: formData.password,
       });
+      router.push("/shop");
     } catch (err: any) {
-      setError(err.message || "Registration failed. Please check the provided details.");
+      const detail = err.response?.data?.detail;
+      if (typeof detail === "string") {
+        setError(detail);
+      } else if (Array.isArray(detail)) {
+        setError(detail.map((d: any) => d.msg).join(", "));
+      } else {
+        setError(err.message || "Registration failed. Please check the provided details.");
+      }
     } finally {
       setLoading(false);
     }
@@ -227,7 +237,7 @@ export default function CustomerRegisterPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Email *
+                  Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
@@ -243,7 +253,7 @@ export default function CustomerRegisterPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Phone *
+                  Phone Number
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />

@@ -187,7 +187,7 @@ export default function LuxuryNavbar() {
             <div className="flex items-center justify-end space-x-3 sm:space-x-6 text-[11px]">
               
               {/* PINCODE / DELIVERY SELECTOR BUTTON */}
-              <button
+              <button suppressHydrationWarning
                 type="button"
                 onClick={() => setIsPincodeModalOpen(true)}
                 className="flex items-center space-x-1.5 text-neutral-200 hover:text-[#8CC63F] transition-colors cursor-pointer group"
