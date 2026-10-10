@@ -12,7 +12,6 @@ import {
   Menu,
   X,
   HelpCircle,
-  Download,
   BookOpen,
   Globe,
   LogOut,
@@ -22,12 +21,15 @@ import {
   Sparkles,
   Loader2,
   ArrowBigRight,
+  ArrowRight,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 import { useCart } from "@/context/cart-context";
 import CartDrawer from "./cart/CartDrawer";
+import { CATALOG_PRODUCTS, CatalogProduct } from "@/data/catalogProducts";
 
 // Demographic Collections for Products Dropdown
 const productCategories = [
@@ -59,6 +61,7 @@ const productCategories = [
 ];
 
 export default function LuxuryNavbar() {
+  const router = useRouter();
   const { customer, logout } = useCustomerAuth();
   const { totalItems, setIsOpen: setCartOpen } = useCart();
 
@@ -66,6 +69,12 @@ export default function LuxuryNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProductsOpen, setIsProductsOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  // Search states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const mobileSearchContainerRef = useRef<HTMLDivElement>(null);
 
   // Delivery Pincode Modal states
   const [isPincodeModalOpen, setIsPincodeModalOpen] = useState(false);
@@ -79,7 +88,16 @@ export default function LuxuryNavbar() {
   const [mounted, setMounted] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Load saved delivery pincode from localStorage on mount
+  // Filter products by search query
+  const searchResults: CatalogProduct[] = searchQuery.trim()
+    ? CATALOG_PRODUCTS.filter(
+        (p) =>
+          p.title.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+          p.subtitle.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+          p.category.toLowerCase().includes(searchQuery.toLowerCase().trim())
+      )
+    : [];
+
   useEffect(() => {
     setMounted(true);
     const savedPin = localStorage.getItem("em_delivery_pincode");
@@ -89,17 +107,31 @@ export default function LuxuryNavbar() {
       setActiveLocation(savedLoc || "India");
     }
 
-    // Close user dropdown on outside click
+    // Close user dropdown and search popup on outside click
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false);
+      }
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(e.target as Node) &&
+        mobileSearchContainerRef.current &&
+        !mobileSearchContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsSearchFocused(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle Delivery Pincode Verification & Storage
+  const handleSelectProduct = (slug: string) => {
+    setSearchQuery("");
+    setIsSearchFocused(false);
+    setIsMobileMenuOpen(false);
+    router.push(`/shop/${slug}`);
+  };
+
   const handlePincodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPincodeError(null);
@@ -156,12 +188,9 @@ export default function LuxuryNavbar() {
   return (
     <>
       <header className="w-full sticky top-0 z-40 shadow-sm font-sans">
-        {/* =========================================================
-            TIER 1: TOP UTILITY BAR (Deep Forest Tone)
-           ========================================================= */}
+        {/* Tier 1: Utility Bar */}
         <div className="bg-[#1C3119] text-[#F2F7EC] text-xs py-2 px-4 sm:px-8 lg:px-12 border-b border-[#2D5A1E]/30">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            {/* Left Utility Links */}
             <div className="hidden md:flex items-center space-x-6">
               <a href="/privacy-policy" className="flex items-center space-x-1.5 hover:text-[#8CC63F] transition-colors">
                 <ArrowBigRight className="w-3.5 h-3.5 text-[#8CC63F]" />
@@ -180,14 +209,12 @@ export default function LuxuryNavbar() {
             </div>
 
             <div className="flex md:hidden items-center text-[10px] text-white/80 tracking-wider uppercase font-medium">
-              <span>Global Wellness Enterprise</span>
+              <span>EnergyMax Group</span>
             </div>
 
-            {/* Right Utility Controls */}
             <div className="flex items-center justify-end space-x-3 sm:space-x-6 text-[11px]">
-              
-              {/* PINCODE / DELIVERY SELECTOR BUTTON */}
-              <button suppressHydrationWarning
+              <button
+                suppressHydrationWarning
                 type="button"
                 onClick={() => setIsPincodeModalOpen(true)}
                 className="flex items-center space-x-1.5 text-neutral-200 hover:text-[#8CC63F] transition-colors cursor-pointer group"
@@ -218,7 +245,6 @@ export default function LuxuryNavbar() {
 
               <span className="text-white/20 hidden sm:inline">&bull;</span>
 
-              {/* DYNAMIC CUSTOMER AUTH BUTTON / ACCOUNT DROPDOWN */}
               {mounted && customer ? (
                 <div className="relative" ref={userMenuRef}>
                   <button
@@ -235,7 +261,6 @@ export default function LuxuryNavbar() {
                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isUserMenuOpen ? "rotate-180" : ""}`} />
                   </button>
 
-                  {/* Account Popover Menu */}
                   <AnimatePresence>
                     {isUserMenuOpen && (
                       <motion.div
@@ -280,19 +305,8 @@ export default function LuxuryNavbar() {
                             className="flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors"
                           >
                             <Package className="w-3.5 h-3.5 text-[#639E1F]" />
-                            <span>My Orders & Strains</span>
+                            <span>My Orders</span>
                           </Link>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsUserMenuOpen(false);
-                              setIsPincodeModalOpen(true);
-                            }}
-                            className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors text-left"
-                          >
-                            <MapPin className="w-3.5 h-3.5 text-[#639E1F]" />
-                            <span>Manage Delivery Pincode</span>
-                          </button>
                         </div>
 
                         <div className="pt-1 mt-1 border-t border-neutral-100">
@@ -321,18 +335,13 @@ export default function LuxuryNavbar() {
                   <span>Sign In</span>
                 </Link>
               )}
-
             </div>
           </div>
         </div>
 
-        {/* =========================================================
-            TIER 2: MAIN BRAND NAVIGATION BAR
-           ========================================================= */}
+        {/* Tier 2: Main Brand Nav */}
         <div className="bg-[#FAFAF7]/95 backdrop-blur-xl border-b border-[#2D5A1E]/10 px-4 sm:px-8 lg:px-12 py-3 sm:py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            
-            {/* Brand Logo & Typography */}
             <Link href="/" className="flex items-center space-x-2 sm:space-x-2.5 group">
               <div className="relative w-8 h-8 sm:w-11 sm:h-11 flex items-center justify-center">
                 <Image
@@ -349,16 +358,14 @@ export default function LuxuryNavbar() {
               </div>
             </Link>
 
-            {/* Desktop Navigation Links */}
             <nav className="hidden lg:flex items-center space-x-8">
-              
-              {/* Products Demographic Dropdown */}
               <div
                 className="relative py-2"
                 onMouseEnter={() => setIsProductsOpen(true)}
                 onMouseLeave={() => setIsProductsOpen(false)}
               >
-                <button suppressHydrationWarning
+                <button
+                  suppressHydrationWarning
                   type="button"
                   className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors flex items-center space-x-1 focus:outline-none cursor-pointer"
                 >
@@ -427,20 +434,92 @@ export default function LuxuryNavbar() {
               </a>
             </nav>
 
-            {/* Search Bar & Dynamic Cart Drawer Trigger */}
+            {/* Desktop Search Bar with Live Dropdown */}
             <div className="flex items-center space-x-3 sm:space-x-5">
-              <div className="hidden md:flex items-center relative">
-                <input
-                  type="text"
-                  placeholder="Search products or SKU..."
-                  className="w-52 lg:w-72 pl-4 pr-10 py-2.5 rounded-full bg-white border border-[#2D5A1E]/20 text-xs text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-[#639E1F] shadow-sm transition-all"
-                />
-                <button
-                  aria-label="Search"
-                  className="absolute right-3 text-[#2D5A1E] hover:text-[#639E1F] transition-colors cursor-pointer"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
+              <div className="hidden md:flex items-center relative" ref={searchContainerRef}>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search products or SKU..."
+                    className="w-56 lg:w-72 pl-4 pr-10 py-2.5 rounded-full bg-white border border-[#2D5A1E]/20 text-xs text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-[#639E1F] shadow-sm transition-all"
+                  />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#2D5A1E]" />
+                  )}
+                </div>
+
+                {/* Desktop Search Results Dropdown */}
+                <AnimatePresence>
+                  {isSearchFocused && searchQuery.trim().length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-[#2D5A1E]/15 p-2 z-50 overflow-hidden max-h-96 overflow-y-auto"
+                    >
+                      {searchResults.length > 0 ? (
+                        <div className="space-y-1">
+                          {searchResults.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onClick={() => handleSelectProduct(product.slug)}
+                              className="w-full p-2.5 rounded-xl hover:bg-[#F2F8ED] flex items-center space-x-3 text-left transition-colors group cursor-pointer"
+                            >
+                              <div className="relative w-10 h-10 rounded-lg bg-[#FAFAF7] border border-neutral-100 flex items-center justify-center overflow-hidden shrink-0">
+                                <Image
+                                  src={product.image}
+                                  alt={product.title}
+                                  fill
+                                  sizes="40px"
+                                  className="object-contain p-1"
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-[#172B15] group-hover:text-[#2D5A1E] truncate">
+                                  {product.title}
+                                </h4>
+                                <p className="text-[10px] text-neutral-500 truncate">
+                                  {product.subtitle}
+                                </p>
+                              </div>
+                              <span className="text-xs font-bold text-[#172B15] shrink-0 font-mono">
+                                ₹{product.price.toLocaleString("en-IN")}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center">
+                          <p className="text-xs text-neutral-500">No matching products found.</p>
+                          <Link
+                            href="/shop"
+                            onClick={() => {
+                              setIsSearchFocused(false);
+                              setSearchQuery("");
+                            }}
+                            className="inline-flex items-center space-x-1 text-[11px] font-bold text-[#2D5A1E] mt-2 hover:underline"
+                          >
+                            <span>Browse full catalog</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Reactive Shopping Bag Button */}
@@ -466,13 +545,10 @@ export default function LuxuryNavbar() {
                 {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
             </div>
-
           </div>
         </div>
 
-        {/* =========================================================
-            MOBILE NAVIGATION DRAWER
-           ========================================================= */}
+        {/* Mobile Navigation Drawer */}
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div
@@ -481,13 +557,68 @@ export default function LuxuryNavbar() {
               exit={{ opacity: 0, height: 0 }}
               className="lg:hidden bg-[#FAFAF7] border-b border-[#2D5A1E]/15 px-6 py-6 space-y-6 shadow-2xl overflow-hidden"
             >
-              <div className="relative w-full">
-                <input
-                  type="text"
-                  placeholder="Search products or SKU..."
-                  className="w-full pl-4 pr-10 py-3 rounded-full bg-white border border-[#2D5A1E]/20 text-xs text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-[#639E1F]"
-                />
-                <Search className="absolute right-3.5 top-3.5 w-4 h-4 text-neutral-400" />
+              {/* Mobile Search Input & Instant Results */}
+              <div className="relative w-full" ref={mobileSearchContainerRef}>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search products or SKU..."
+                    className="w-full pl-4 pr-10 py-3 rounded-full bg-white border border-[#2D5A1E]/20 text-xs text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-[#639E1F]"
+                  />
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3.5 top-3.5 text-neutral-400 hover:text-neutral-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <Search className="absolute right-3.5 top-3.5 w-4 h-4 text-neutral-400" />
+                  )}
+                </div>
+
+                {searchQuery.trim().length > 0 && (
+                  <div className="mt-2 bg-white rounded-2xl border border-[#2D5A1E]/15 p-2 shadow-lg max-h-64 overflow-y-auto space-y-1">
+                    {searchResults.length > 0 ? (
+                      searchResults.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => handleSelectProduct(product.slug)}
+                          className="w-full p-2.5 rounded-xl hover:bg-[#F2F8ED] flex items-center space-x-3 text-left transition-colors"
+                        >
+                          <div className="relative w-9 h-9 rounded-lg bg-[#FAFAF7] border border-neutral-100 flex items-center justify-center overflow-hidden shrink-0">
+                            <Image
+                              src={product.image}
+                              alt={product.title}
+                              fill
+                              sizes="36px"
+                              className="object-contain p-1"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-bold text-[#172B15] truncate">
+                              {product.title}
+                            </h4>
+                            <p className="text-[10px] text-neutral-500 truncate">
+                              {product.subtitle}
+                            </p>
+                          </div>
+                          <span className="text-xs font-bold text-[#172B15] font-mono">
+                            ₹{product.price.toLocaleString("en-IN")}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="p-3 text-center text-xs text-neutral-500">
+                        No products found.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Customer Account Indicator for Mobile */}
@@ -555,9 +686,6 @@ export default function LuxuryNavbar() {
                 <Link href="/science" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">
                   Discover Science
                 </Link>
-                <a href="#promotions" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#639E1F] py-2 border-b border-neutral-200">
-                  Promotions
-                </a>
               </div>
 
               <div className="pt-4 border-t border-neutral-200 flex flex-col space-y-3 text-xs text-neutral-700">
@@ -587,9 +715,7 @@ export default function LuxuryNavbar() {
       {/* Global Slide-Over Cart Drawer */}
       <CartDrawer />
 
-      {/* =========================================================
-          DELIVERY PINCODE SELECTION MODAL
-         ========================================================= */}
+      {/* Delivery Pincode Modal */}
       <AnimatePresence>
         {isPincodeModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -703,11 +829,6 @@ export default function LuxuryNavbar() {
                   </button>
                 </div>
               </form>
-
-              <div className="text-[11px] text-neutral-500 border-t border-neutral-100 pt-3 space-y-1">
-                <p>• Temperature-controlled cold chain for 1 Trillion CFU batches.</p>
-                <p>• Free express delivery available for qualifying orders.</p>
-              </div>
             </motion.div>
           </div>
         )}
