@@ -1,23 +1,20 @@
-// app/shop/account/orders/[order_id]/page.tsx
 "use client";
 
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Package,
-  Clock,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
   Loader2,
   ArrowLeft,
+  Sparkles,
   Lock,
   RotateCcw,
-  Sparkles,
+  Clock,
 } from "lucide-react";
-import { useCustomerAuth } from "@/context/customer-auth-context";
-import { getOrderTracking, OrderTrackingResponse } from "@/lib/services/orderService";
+import { customerClient } from "@/lib/customer-client";
 import {
   createPaymentFromOrder,
   verifyPayment,
@@ -26,7 +23,23 @@ import {
 } from "@/lib/services/paymentService";
 import { loadCashfreeSDK } from "@/lib/cashfree";
 
-export default function OrderDetailsPage({
+interface TimelineEvent {
+  status: string;
+  label: string;
+  completed: boolean;
+  current: boolean;
+  timestamp: string | null;
+  note: string | null;
+}
+
+interface OrderTrackingData {
+  public_id: string;
+  order_number: string;
+  current_status: string;
+  timeline: TimelineEvent[];
+}
+
+export default function OrderDetailsAndTrackingPage({
   params,
 }: {
   params: Promise<{ order_id: string }>;
@@ -38,9 +51,7 @@ export default function OrderDetailsPage({
   const searchParams = useSearchParams();
   const paymentSuccessQuery = searchParams.get("payment_success") === "true";
 
-  const { isAuthenticated, loading: authLoading } = useCustomerAuth();
-
-  const [order, setOrder] = useState<OrderTrackingResponse | null>(null);
+  const [order, setOrder] = useState<OrderTrackingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,48 +68,49 @@ export default function OrderDetailsPage({
 
   const fetchTracking = async () => {
     try {
-      const data = await getOrderTracking(orderId);
-      setOrder(data);
+      // Calls: GET /api/v1/shop/orders/{order_public_id}/tracking
+      const res = await customerClient.get<OrderTrackingData>(
+        `/api/v1/shop/orders/${orderId}/tracking`
+      );
+      setOrder(res.data);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Unable to retrieve order details.");
+      setError(
+        typeof detail === "string"
+          ? detail
+          : "Unable to retrieve order tracking history."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!isAuthenticated) {
-      router.push(`/shop/auth/login?redirect=/shop/account/orders/${orderId}`);
-      return;
-    }
     fetchTracking();
-  }, [orderId, isAuthenticated, authLoading, router]);
+  }, [orderId]);
 
-  // Retry Payment via Cashfree
+  // Cashfree Modal Re-launch for "pending_payment"
   const handleRetryPayment = async () => {
     setRetryingPayment(true);
     setError(null);
 
     try {
-      setPaymentPhase("Initializing payment gateway...");
+      setPaymentPhase("Securing payment session...");
       const payment: PaymentResponse = await createPaymentFromOrder(orderId);
 
       if (!payment.payment_session_id) {
-        throw new Error("Missing Cashfree payment session.");
+        throw new Error("Cashfree payment session was not generated.");
       }
 
-      const CashfreeSDK = await loadCashfreeSDK();
-      const isProduction = process.env.NEXT_PUBLIC_CASHFREE_ENV === "production";
-      const cashfree = CashfreeSDK({ mode: isProduction ? "production" : "sandbox" });
+      setPaymentPhase("Launching gateway...");
+      const cashfree = await loadCashfreeSDK();
 
       cashfree.checkout({
         paymentSessionId: payment.payment_session_id,
         redirectTarget: "_modal",
       }).then(async (result: any) => {
         if (result.error) {
-          setError(result.error.message || "Payment cancelled.");
+          setError(result.error.message || "Payment incomplete.");
           setRetryingPayment(false);
           setPaymentPhase(null);
           return;
@@ -113,7 +125,7 @@ export default function OrderDetailsPage({
       });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Payment attempt failed.");
+      setError(typeof detail === "string" ? detail : err.message || "Payment attempt failed.");
     } finally {
       setRetryingPayment(false);
       setPaymentPhase(null);
@@ -127,15 +139,13 @@ export default function OrderDetailsPage({
     setError(null);
 
     try {
-      // Fetch or use payment reference
       const payment: PaymentResponse = await createPaymentFromOrder(orderId);
-
       await requestRefund(payment.public_id, {
         amount: refundAmount ? parseFloat(refundAmount) : undefined,
         reason: refundReason.trim() || undefined,
       });
 
-      setRefundMessage("Refund initiated successfully with payment provider.");
+      setRefundMessage("Refund initiated successfully with Cashfree.");
       setShowRefundModal(false);
       await fetchTracking();
     } catch (err: any) {
@@ -151,7 +161,7 @@ export default function OrderDetailsPage({
       <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3">
         <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
         <p className="text-xs uppercase tracking-[0.25em] text-neutral-500 font-bold">
-          Consulting Batch Dispatch Logistics...
+          Consulting Dispatch Manifest...
         </p>
       </div>
     );
@@ -163,12 +173,12 @@ export default function OrderDetailsPage({
         <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-[#2D5A1E]/15 shadow-xl space-y-4">
           <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
           <h2 className="text-lg font-bold text-[#172B15]">Order Not Found</h2>
-          <p className="text-xs text-neutral-500">We could not locate this order allocation.</p>
+          <p className="text-xs text-neutral-500">{error || "We could not find this order record."}</p>
           <Link
-            href="/shop"
+            href="/shop/account/orders"
             className="inline-block px-5 py-2.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider"
           >
-            Return to Boutique
+            Track Another Order
           </Link>
         </div>
       </div>
@@ -186,18 +196,20 @@ export default function OrderDetailsPage({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
           <div className="space-y-1">
             <Link
-              href="/shop"
+              href="/shop/account/orders"
               className="text-xs font-bold uppercase tracking-wider text-neutral-500 hover:text-[#2D5A1E] flex items-center space-x-1 mb-2"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Return to Boutique</span>
+              <span>Back to Lookup</span>
             </Link>
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl sm:text-3xl font-serif tracking-tight text-[#172B15]">
                 Order <span className="font-mono text-[#639E1F]">{order.order_number}</span>
               </h1>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                isPaid ? "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40" : "bg-amber-100 text-amber-800"
+                isPaid
+                  ? "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40"
+                  : "bg-amber-100 text-amber-800 border border-amber-200"
               }`}>
                 {order.current_status.replace("_", " ")}
               </span>
@@ -259,15 +271,15 @@ export default function OrderDetailsPage({
           </div>
         )}
 
-        {/* Cold-Chain Dispatch Timeline */}
+        {/* Cold-Chain Timeline */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-sm space-y-6">
           <div className="border-b border-neutral-100 pb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-serif font-bold text-[#172B15]">
-                Logistics & Formulation Timeline
+                Logistics & Dispatch Timeline
               </h2>
               <p className="text-xs text-neutral-500">
-                Live verification of cold-chain microbiology preparation and dispatch.
+                Live verification of cold-chain microbiology preparation and carrier transit.
               </p>
             </div>
             <ShieldCheck className="w-5 h-5 text-[#639E1F]" />
@@ -276,7 +288,7 @@ export default function OrderDetailsPage({
           <div className="relative pl-6 border-l-2 border-[#2D5A1E]/15 space-y-8 my-4">
             {order.timeline.map((step, idx) => (
               <div key={idx} className="relative">
-                {/* Node icon */}
+                {/* Status Dot */}
                 <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
                   step.current
                     ? "border-[#639E1F] bg-[#639E1F] ring-4 ring-[#8CC63F]/20"
@@ -308,7 +320,7 @@ export default function OrderDetailsPage({
           </div>
         </div>
 
-        {/* Probiotic Transit Viability Guarantee */}
+        {/* Batch Quality Viability Guarantee */}
         <div className="p-5 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-sm flex items-center space-x-4">
           <div className="w-10 h-10 rounded-2xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
             <Sparkles className="w-5 h-5 text-[#639E1F]" />
@@ -321,7 +333,7 @@ export default function OrderDetailsPage({
 
       </div>
 
-      {/* REFUND MODAL */}
+      {/* REFUND REQUEST MODAL */}
       {showRefundModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4">
@@ -333,7 +345,7 @@ export default function OrderDetailsPage({
             <form onSubmit={handleRefundSubmit} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-neutral-500">
-                  Refund Amount (Optional, leave blank for full refund)
+                  Refund Amount (Optional, leave blank for full reversal)
                 </label>
                 <input
                   type="number"
