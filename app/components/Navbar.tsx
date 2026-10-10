@@ -358,7 +358,7 @@ export default function LuxuryNavbar() {
                 onMouseEnter={() => setIsProductsOpen(true)}
                 onMouseLeave={() => setIsProductsOpen(false)}
               >
-                <button
+                <button suppressHydrationWarning
                   type="button"
                   className="text-xs font-bold uppercase tracking-widest text-[#172B15] hover:text-[#639E1F] transition-colors flex items-center space-x-1 focus:outline-none cursor-pointer"
                 >

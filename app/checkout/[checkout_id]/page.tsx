@@ -456,7 +456,7 @@ export default function CheckoutPage({
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>Lock Price & Proceed to Payment</span>
+                    <span>Proceed to Payment</span>
                   </>
                 )}
               </button>
