@@ -1,8 +1,6 @@
-// app/admin/inventory/reservations/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Lock,
   Unlock,
@@ -15,7 +13,9 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert,
+  RefreshCw,
+  Infinity,
+  Zap,
 } from "lucide-react";
 import {
   getAdminReservations,
@@ -49,18 +49,17 @@ export default function ReservationsPage() {
   const [search, setSearch] = useState("");
   const [limit] = useState(20);
   const [offset, setOffset] = useState(0);
-
-  // Action states
   const [processingId, setProcessingId] = useState<number | null>(null);
 
   // Create Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
-  const [selectedWarehousePublicId, setSelectedWarehousePublicId] = useState("");
-  const [variantPublicId, setVariantPublicId] = useState("");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
+  const [variantIdInput, setVariantIdInput] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [referenceType, setReferenceType] = useState("ORDER");
+  const [referenceType, setReferenceType] = useState("MANUAL_HOLD");
   const [referenceId, setReferenceId] = useState("");
+  const [noExpiry, setNoExpiry] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const fetchReservations = async () => {
@@ -68,19 +67,15 @@ export default function ReservationsPage() {
     setError(null);
     try {
       const data = await getAdminReservations({
-        status: statusFilter || undefined,
+        status: (statusFilter as any) || undefined,
         limit,
-        offset,
+        page: Math.floor(offset / limit) + 1,
       });
       setReservations(data.items || []);
       setTotal(data.total || 0);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === "string"
-          ? detail
-          : "Unable to retrieve inventory reservation records."
-      );
+      setError(typeof detail === "string" ? detail : "Unable to load inventory reservations.");
     } finally {
       setLoading(false);
     }
@@ -102,8 +97,14 @@ export default function ReservationsPage() {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedWarehousePublicId || !variantPublicId.trim() || !quantity) {
-      setError("Warehouse UUID, Variant UUID, and Quantity are required.");
+    if (!selectedWarehouseId || !variantIdInput.trim() || !quantity) {
+      setError("Target Warehouse, Product Variant ID, and Quantity are required.");
+      return;
+    }
+
+    const parsedQty = parseFloat(quantity);
+    if (isNaN(parsedQty) || parsedQty <= 0) {
+      setError("Please specify a quantity greater than 0.");
       return;
     }
 
@@ -111,31 +112,49 @@ export default function ReservationsPage() {
     setError(null);
     setSuccess(null);
 
-    const idempotencyKey = `res_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const isNumericVariant = /^\d+$/.test(variantIdInput.trim());
+    const resolvedVariantId = isNumericVariant ? parseInt(variantIdInput.trim(), 10) : variantIdInput.trim();
 
     try {
       await createAdminReservation({
-        warehouse_id: selectedWarehousePublicId,
-        variant_id: variantPublicId.trim(),
-        quantity: parseFloat(quantity),
-        reference_type: referenceType.trim() || "ORDER",
-        reference_id: referenceId.trim() || `MANUAL-${Date.now()}`,
-        idempotency_key: idempotencyKey,
+        warehouse_id: selectedWarehouseId,
+        variant_id: resolvedVariantId as any,
+        quantity: parsedQty,
+        reference_type: referenceType.trim() || "MANUAL_HOLD",
+        reference_id: referenceId.trim() || `HOLD-${Date.now()}`,
+        expires_at: noExpiry ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        idempotency_key: `res_${Date.now()}_${Math.random().toString(36).substring(7)}`,
       });
 
-      setSuccess("Stock reservation created successfully.");
+      setSuccess("Reservation created with no expiration window.");
       setIsModalOpen(false);
-      setVariantPublicId("");
+      setVariantIdInput("");
       setQuantity("");
       setReferenceId("");
       await fetchReservations();
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === "string" ? detail : "Failed to create reservation hold."
-      );
+      setError(typeof detail === "string" ? detail : "Failed to create reservation hold.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleConfirm = async (id: number) => {
+    if (!confirm(`Force-confirm reservation #${id}? This will permanently deduct inventory with manual admin override.`)) return;
+    setProcessingId(id);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await confirmAdminReservation(id, true); // true = force override expiry
+      setSuccess(`Reservation #${id} confirmed and converted to stock deduction (Override Applied).`);
+      await fetchReservations();
+    } catch (err: any) {
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : `Failed to confirm reservation #${id}.`);
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -147,33 +166,11 @@ export default function ReservationsPage() {
 
     try {
       await releaseAdminReservation(id);
-      setSuccess(`Reservation #${id} released back to available inventory.`);
+      setSuccess(`Reservation #${id} released back to stock.`);
       await fetchReservations();
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === "string" ? detail : `Failed to release reservation #${id}.`
-      );
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleConfirm = async (id: number) => {
-    if (!confirm(`Confirm and fulfill reservation #${id}? This will deduct on-hand units permanently.`)) return;
-    setProcessingId(id);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await confirmAdminReservation(id);
-      setSuccess(`Reservation #${id} confirmed and converted to permanent stock deduction.`);
-      await fetchReservations();
-    } catch (err: any) {
-      const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === "string" ? detail : `Failed to confirm reservation #${id}.`
-      );
+      setError(typeof detail === "string" ? detail : `Failed to release reservation #${id}.`);
     } finally {
       setProcessingId(null);
     }
@@ -206,7 +203,7 @@ export default function ReservationsPage() {
         return (
           <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-600 border border-neutral-200">
             <Clock className="w-3 h-3 text-neutral-400" />
-            <span>Expired</span>
+            <span>Expired (Override Available)</span>
           </span>
         );
       default:
@@ -221,8 +218,8 @@ export default function ReservationsPage() {
   const filteredReservations = reservations.filter((r) => {
     const q = search.toLowerCase();
     return (
-      r.reference_id.toLowerCase().includes(q) ||
-      r.reference_type.toLowerCase().includes(q) ||
+      (r.reference_id && r.reference_id.toLowerCase().includes(q)) ||
+      (r.sku && r.sku.toLowerCase().includes(q)) ||
       String(r.id).includes(q)
     );
   });
@@ -232,7 +229,6 @@ export default function ReservationsPage() {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-4">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
@@ -243,17 +239,29 @@ export default function ReservationsPage() {
           </h1>
         </div>
 
-        <button
-          onClick={() => {
-            setError(null);
-            setSuccess(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#2D5A1E] transition-all cursor-pointer shadow-md"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Reservation</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={fetchReservations}
+            disabled={loading}
+            className="p-2.5 rounded-2xl border border-[#2D5A1E]/20 text-[#2D5A1E] hover:bg-[#F2F8ED] transition-all cursor-pointer shadow-sm disabled:opacity-50"
+            title="Refresh list"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#2D5A1E] transition-all cursor-pointer shadow-md"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Reservation (No Expiry)</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -270,7 +278,6 @@ export default function ReservationsPage() {
         </div>
       )}
 
-      {/* Filters Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
@@ -278,7 +285,7 @@ export default function ReservationsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order ID or reference..."
+            placeholder="Search by order ID, SKU, or reservation ID..."
             className="w-full bg-white border border-[#2D5A1E]/15 rounded-xl pl-9 pr-4 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
           />
         </div>
@@ -299,7 +306,6 @@ export default function ReservationsPage() {
         </select>
       </div>
 
-      {/* Table Container */}
       <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-16 flex flex-col items-center justify-center space-y-3">
@@ -321,7 +327,7 @@ export default function ReservationsPage() {
               <thead className="bg-[#FAFAF7] border-b border-neutral-100 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
                 <tr>
                   <th className="px-6 py-4">ID</th>
-                  <th className="px-6 py-4">Reference & Order</th>
+                  <th className="px-6 py-4">Reference & SKU</th>
                   <th className="px-6 py-4">Facility / Variant ID</th>
                   <th className="px-6 py-4 text-center">Reserved Qty</th>
                   <th className="px-6 py-4">Status</th>
@@ -330,69 +336,76 @@ export default function ReservationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {filteredReservations.map((r) => (
-                  <tr key={r.id} className="hover:bg-[#FAFAF7]/60 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-[#172B15]">
-                      #{r.id}
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-[#172B15]">{r.reference_id}</p>
-                      <span className="font-mono text-[10px] text-neutral-400 uppercase">
-                        {r.reference_type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-mono text-[11px] text-neutral-600">
-                      <div>WH ID: {r.warehouse_id}</div>
-                      <div>Variant ID: {r.variant_id}</div>
-                    </td>
-                    <td className="px-6 py-4 text-center font-mono font-bold text-[#2D5A1E]">
-                      {Number(r.quantity).toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-6 py-4">{getStatusBadge(r.status)}</td>
-                    <td className="px-6 py-4 font-mono text-[11px] text-neutral-500">
-                      {r.expires_at ? (
-                        <span>
-                          {new Date(r.expires_at).toLocaleTimeString("en-IN", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                {filteredReservations.map((r) => {
+                  const isActionable = r.status === "ACTIVE" || r.status === "EXPIRED";
+                  return (
+                    <tr key={r.id} className="hover:bg-[#FAFAF7]/60 transition-colors">
+                      <td className="px-6 py-4 font-mono font-bold text-[#172B15]">
+                        #{r.id}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-[#172B15]">{r.reference_id}</p>
+                        <span className="font-mono text-[10px] text-neutral-400 uppercase">
+                          {r.sku ? `SKU: ${r.sku}` : r.product_name || "HOLD"}
                         </span>
-                      ) : (
-                        <span className="text-neutral-400 italic">No Expiry</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {r.status === "ACTIVE" ? (
-                        <div className="inline-flex items-center space-x-1.5">
-                          <button
-                            type="button"
-                            disabled={processingId === r.id}
-                            onClick={() => handleConfirm(r.id)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] font-bold uppercase transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            type="button"
-                            disabled={processingId === r.id}
-                            onClick={() => handleRelease(r.id)}
-                            className="px-2.5 py-1 rounded-lg bg-red-100 text-red-800 hover:bg-red-200 text-[10px] font-bold uppercase transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            Release
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-neutral-400 italic text-[11px]">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-[11px] text-neutral-600">
+                        <div>WH: {r.warehouse_name || r.warehouse_code || `#${r.warehouse_id}`}</div>
+                        <div>Variant: {r.variant_public_id || `#${r.variant_id}`}</div>
+                      </td>
+                      <td className="px-6 py-4 text-center font-mono font-bold text-[#2D5A1E]">
+                        {Number(r.quantity).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-6 py-4">{getStatusBadge(r.status)}</td>
+                      <td className="px-6 py-4 font-mono text-[11px] text-neutral-500">
+                        {r.expires_at ? (
+                          <span>
+                            {new Date(r.expires_at).toLocaleTimeString("en-IN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 text-[#2D5A1E] font-bold">
+                            <Infinity className="w-3.5 h-3.5" />
+                            <span>Indefinite</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {isActionable ? (
+                          <div className="inline-flex items-center space-x-1.5">
+                            <button
+                              type="button"
+                              disabled={processingId === r.id}
+                              onClick={() => handleConfirm(r.id)}
+                              className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] font-bold uppercase transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+                              title="Force confirm using manual override"
+                            >
+                              <Zap className="w-2.5 h-2.5" />
+                              <span>{processingId === r.id ? "..." : "Confirm"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={processingId === r.id}
+                              onClick={() => handleRelease(r.id)}
+                              className="px-2.5 py-1 rounded-lg bg-red-100 text-red-800 hover:bg-red-200 text-[10px] font-bold uppercase transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              {processingId === r.id ? "..." : "Release"}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-neutral-400 italic text-[11px]">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Pagination Bar */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-100 text-xs">
             <span className="text-neutral-500">
@@ -400,6 +413,7 @@ export default function ReservationsPage() {
             </span>
             <div className="flex items-center space-x-2">
               <button
+                type="button"
                 onClick={() => setOffset((o) => Math.max(0, o - limit))}
                 disabled={offset === 0}
                 className="p-2 rounded-xl border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50 cursor-pointer"
@@ -407,6 +421,7 @@ export default function ReservationsPage() {
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setOffset((o) => o + limit)}
                 disabled={offset + limit >= total}
                 className="p-2 rounded-xl border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50 cursor-pointer"
@@ -418,16 +433,15 @@ export default function ReservationsPage() {
         )}
       </div>
 
-      {/* CREATE RESERVATION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#639E1F] block">
-                Inventory Allocation Hold
+                Manual Inventory Lock
               </span>
               <h3 className="text-lg font-serif font-bold text-[#172B15]">
-                Create Stock Reservation
+                Create Stock Hold
               </h3>
             </div>
 
@@ -438,8 +452,8 @@ export default function ReservationsPage() {
                 </label>
                 <select
                   required
-                  value={selectedWarehousePublicId}
-                  onChange={(e) => setSelectedWarehousePublicId(e.target.value)}
+                  value={selectedWarehouseId}
+                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
                   className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2.5 text-xs text-[#172B15] cursor-pointer"
                 >
                   <option value="">Select facility...</option>
@@ -453,14 +467,14 @@ export default function ReservationsPage() {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-neutral-500">
-                  Product Variant UUID *
+                  Product Variant (Numeric ID or UUID) *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000"
-                  value={variantPublicId}
-                  onChange={(e) => setVariantPublicId(e.target.value)}
+                  placeholder="e.g. 1 or 550e8400-e29b-41d4-a716-446655440000"
+                  value={variantIdInput}
+                  onChange={(e) => setVariantIdInput(e.target.value)}
                   className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2.5 text-xs font-mono text-[#172B15]"
                 />
               </div>
@@ -481,30 +495,30 @@ export default function ReservationsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-neutral-500">
-                    Reference Type
-                  </label>
-                  <input
-                    type="text"
-                    value={referenceType}
-                    onChange={(e) => setReferenceType(e.target.value)}
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-3 py-2 text-xs text-[#172B15]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-neutral-500">
-                    Reference ID
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. ORDER-9021"
-                    value={referenceId}
-                    onChange={(e) => setReferenceId(e.target.value)}
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-3 py-2 text-xs font-mono text-[#172B15]"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-neutral-500">
+                  Reference Note / ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. MANUAL-VIP-HOLD"
+                  value={referenceId}
+                  onChange={(e) => setReferenceId(e.target.value)}
+                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-3 py-2 text-xs font-mono text-[#172B15]"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2 bg-[#FAFAF7] p-3 rounded-2xl border border-neutral-100">
+                <input
+                  type="checkbox"
+                  id="noExpiry"
+                  checked={noExpiry}
+                  onChange={(e) => setNoExpiry(e.target.checked)}
+                  className="w-4 h-4 text-[#2D5A1E] rounded accent-[#2D5A1E]"
+                />
+                <label htmlFor="noExpiry" className="text-xs font-semibold text-[#172B15] cursor-pointer">
+                  Indefinite Hold (No Expiration Window)
+                </label>
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-2">
@@ -518,9 +532,9 @@ export default function ReservationsPage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] transition-all disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] transition-all disabled:opacity-50 cursor-pointer shadow-sm"
                 >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Place Hold"}
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Indefinite Hold"}
                 </button>
               </div>
             </form>

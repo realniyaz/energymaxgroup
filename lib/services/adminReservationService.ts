@@ -1,91 +1,99 @@
-// lib/services/adminReservationService.ts
 import { apiClient } from "@/lib/api-client";
+
+export type ReservationStatus = "ACTIVE" | "CONFIRMED" | "RELEASED" | "EXPIRED" | "CANCELLED";
 
 export interface ReservationItem {
   id: number;
-  warehouse_id: number;
-  variant_id: number;
-  quantity: string | number;
-  status: "ACTIVE" | "CONFIRMED" | "RELEASED" | "EXPIRED" | string;
-  reference_type: string;
+  public_id?: string;
   reference_id: string;
-  expires_at: string | null;
+  status: ReservationStatus;
+  product_id?: number;
+  product_name?: string;
+  variant_id?: number;
+  variant_public_id?: string;
+  sku?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  warehouse_code?: string;
+  quantity: number | string;
+  expires_at?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface ReservationListResponse {
   items: ReservationItem[];
   total: number;
+  page?: number;
+  page_size?: number;
 }
 
-export interface ReservationCreatePayload {
-  warehouse_id: string; // Warehouse public UUID
-  variant_id: string;   // Variant public UUID
+export interface GetReservationsParams {
+  page?: number;
+  limit?: number;
+  status?: ReservationStatus;
+  warehouse_id?: number;
+}
+
+export interface CreateReservationPayload {
+  warehouse_id: number | string;
+  variant_id: number | string;
   quantity: number;
   reference_type: string;
   reference_id: string;
-  idempotency_key?: string | null;
+  expires_at?: string | null;
+  idempotency_key?: string;
 }
 
-export interface ReservationFilterParams {
-  warehouse_id?: string;
-  variant_id?: string;
-  status?: string;
-  reference_type?: string;
-  reference_id?: string;
-  limit?: number;
-  offset?: number;
-}
-
-// 1. List reservations
 export async function getAdminReservations(
-  params?: ReservationFilterParams
+  params?: GetReservationsParams
 ): Promise<ReservationListResponse> {
-  const res = await apiClient.get<ReservationListResponse>(
-    "/api/v1/admin/inventory/reservations",
-    { params }
-  );
-  return res.data;
+  const query = new URLSearchParams();
+  if (params?.page) query.append("page", String(params.page));
+  if (params?.limit) query.append("limit", String(params.limit));
+  if (params?.status) query.append("status", params.status);
+  if (params?.warehouse_id) query.append("warehouse_id", String(params.warehouse_id));
+
+  const url = `/api/v1/admin/inventory/reservations${query.toString() ? `?${query.toString()}` : ""}`;
+  const response = await apiClient.get<any>(url);
+  const data = response.data;
+
+  if (Array.isArray(data)) {
+    return { items: data, total: data.length };
+  }
+  return {
+    items: data.items || [],
+    total: data.total || 0,
+    page: data.page,
+    page_size: data.page_size || params?.limit,
+  };
 }
 
-// 2. Get single reservation
-export async function getAdminReservation(
-  reservationId: number
-): Promise<ReservationItem> {
-  const res = await apiClient.get<ReservationItem>(
-    `/api/v1/admin/inventory/reservations/${reservationId}`
-  );
-  return res.data;
-}
-
-// 3. Create reservation
 export async function createAdminReservation(
-  payload: ReservationCreatePayload
+  payload: CreateReservationPayload
 ): Promise<ReservationItem> {
-  const res = await apiClient.post<ReservationItem>(
+  const response = await apiClient.post<ReservationItem>(
     "/api/v1/admin/inventory/reservations",
     payload
   );
-  return res.data;
+  return response.data;
 }
 
-// 4. Release reservation (releases reserved units back to available)
-export async function releaseAdminReservation(
-  reservationId: number
+export async function confirmAdminReservation(
+  reservationId: number | string,
+  adminOverride: boolean = true
 ): Promise<ReservationItem> {
-  const res = await apiClient.post<ReservationItem>(
+  const response = await apiClient.post<ReservationItem>(
+    `/api/v1/admin/inventory/reservations/${reservationId}/confirm?admin_override=${adminOverride}`
+  );
+  return response.data;
+}
+
+export async function releaseAdminReservation(
+  reservationId: number | string
+): Promise<ReservationItem> {
+  const response = await apiClient.post<ReservationItem>(
     `/api/v1/admin/inventory/reservations/${reservationId}/release`
   );
-  return res.data;
-}
-
-// 5. Confirm reservation (deducts on_hand and reserves permanently for fulfillment)
-export async function confirmAdminReservation(
-  reservationId: number
-): Promise<ReservationItem> {
-  const res = await apiClient.post<ReservationItem>(
-    `/api/v1/admin/inventory/reservations/${reservationId}/confirm`
-  );
-  return res.data;
+  return response.data;
 }

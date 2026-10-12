@@ -1,84 +1,73 @@
 // lib/services/checkoutService.ts
+import { apiClient } from "@/lib/api-client";
 
-import { customerClient } from "@/lib/customer-client";
-
-export interface CheckoutItemResponse {
+export interface CheckoutItem {
   public_id: string;
-  product_id: number;
+  product_public_id: string;
+  variant_public_id?: string;
   product_name: string;
-  unit_price: number | string;
   quantity: number;
+  unit_price: number | string;
   subtotal: number | string;
 }
-
-export type CheckoutStatus =
-  | "created"
-  | "pricing_locked"
-  | "expired"
-  | "order_created";
 
 export interface CheckoutResponse {
   public_id: string;
-  status: CheckoutStatus;
-  selected_address_id: number | null;
-  items: CheckoutItemResponse[];
+  customer_id?: number | string;
+  status: "draft" | "confirmed" | "completed" | "expired" | "cancelled";
+  selected_address_id?: number | string | null;
+  items: CheckoutItem[];
   subtotal: number | string;
-  discount_amount: number | string;
-  shipping_amount: number | string;
   tax_amount: number | string;
+  discount_amount: number | string;
   total_amount: number | string;
-  expires_at: string;
+  currency: string;
+  expires_at?: string;
   created_at: string;
-  updated_at: string;
 }
 
 /**
- * Creates a new checkout session from the authenticated customer's cart.
- * Moves cart items to frozen checkout items with a 30-minute expiry window.
+ * POST /api/v1/shop/checkout
+ * Initializes a new checkout session from the active cart.
  */
 export async function createCheckout(): Promise<CheckoutResponse> {
-  const response = await customerClient.post<CheckoutResponse>(
+  const response = await apiClient.post<CheckoutResponse>(
     "/api/v1/shop/checkout"
   );
   return response.data;
 }
 
 /**
- * Fetches an active checkout session by its public_id.
+ * GET /api/v1/shop/checkout/{checkout_id}
  */
-export async function getCheckout(
-  checkoutPublicId: string
-): Promise<CheckoutResponse> {
-  const response = await customerClient.get<CheckoutResponse>(
-    `/api/v1/shop/checkout/${checkoutPublicId}`
+export async function getCheckout(checkoutId: string): Promise<CheckoutResponse> {
+  const response = await apiClient.get<CheckoutResponse>(
+    `/api/v1/shop/checkout/${checkoutId}`
   );
   return response.data;
 }
 
 /**
- * Attaches a selected customer delivery address to the checkout session.
+ * POST /api/v1/shop/checkout/{checkout_id}/select-address
  */
 export async function selectCheckoutAddress(
-  checkoutPublicId: string,
+  checkoutId: string,
   addressPublicId: string
 ): Promise<CheckoutResponse> {
-  const response = await customerClient.patch<CheckoutResponse>(
-    `/api/v1/shop/checkout/${checkoutPublicId}/address`,
-    {
-      address_public_id: addressPublicId,
-    }
+  const response = await apiClient.post<CheckoutResponse>(
+    `/api/v1/shop/checkout/${checkoutId}/select-address`,
+    { address_public_id: addressPublicId }
   );
   return response.data;
 }
 
 /**
- * Confirms checkout, verifies calculated pricing, and locks pricing (status: "pricing_locked").
+ * POST /api/v1/shop/checkout/{checkout_id}/confirm
+ * Locks items, prices, and creates the inventory reservation.
  */
-export async function confirmCheckout(
-  checkoutPublicId: string
-): Promise<CheckoutResponse> {
-  const response = await customerClient.post<CheckoutResponse>(
-    `/api/v1/shop/checkout/${checkoutPublicId}/confirm`
+export async function confirmCheckout(checkoutId: string): Promise<CheckoutResponse> {
+  const response = await apiClient.post<CheckoutResponse>(
+    `/api/v1/shop/checkout/${checkoutId}/confirm`
   );
   return response.data;
 }
