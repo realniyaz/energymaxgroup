@@ -5,7 +5,6 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import {
   User,
   Mail,
@@ -17,12 +16,15 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  KeyRound,
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
 export default function CustomerRegisterPage() {
   const router = useRouter();
-  const { registerCustomer } = useCustomerAuth();
+  const { registerCustomer, verifyOtp, requestOtp } = useCustomerAuth();
+
+  const [step, setStep] = useState<"register" | "verify_otp">("register");
 
   const [formData, setFormData] = useState({
     username: "",
@@ -34,20 +36,22 @@ export default function CustomerRegisterPage() {
     confirm_password: "",
   });
 
+  const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfoMsg(null);
 
-    // Backend validation constraints
-    if (!formData.email && !formData.phone) {
-      setError("Please provide either an email address or a phone number.");
+    if (!formData.email) {
+      setError("An email address is required to create an account.");
       return;
     }
 
@@ -68,11 +72,15 @@ export default function CustomerRegisterPage() {
         username: formData.username.trim(),
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim() || undefined,
-        email: formData.email.trim() || undefined,
+        email: formData.email.trim().toLowerCase(),
         phone: formData.phone.trim() || undefined,
         password: formData.password,
       });
-      router.push("/shop");
+
+      // Dispatch OTP code for verification
+      await requestOtp(formData.email.trim().toLowerCase(), "email", "registration");
+      setInfoMsg(`A 6-digit verification code was sent to ${formData.email.trim().toLowerCase()}.`);
+      setStep("verify_otp");
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       if (typeof detail === "string") {
@@ -80,8 +88,46 @@ export default function CustomerRegisterPage() {
       } else if (Array.isArray(detail)) {
         setError(detail.map((d: any) => d.msg).join(", "));
       } else {
-        setError(err.message || "Registration failed. Please check the provided details.");
+        setError(err.message || "Registration failed. Please review your details.");
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      await verifyOtp(
+        formData.email.trim().toLowerCase(),
+        otpCode.trim(),
+        "email",
+        "registration"
+      );
+      router.push("/shop");
+    } catch (err: any) {
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Invalid or expired verification code."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await requestOtp(formData.email.trim().toLowerCase(), "email", "registration");
+      setInfoMsg("A fresh 6-digit code has been dispatched to your email.");
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Failed to resend code.");
     } finally {
       setLoading(false);
     }
@@ -89,7 +135,6 @@ export default function CustomerRegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col lg:flex-row text-[#172B15]">
-      
       {/* Left Brand Panel */}
       <div className="relative hidden lg:flex lg:w-5/12 bg-[#172B15] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden border-r border-[#2D5A1E]/30">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#8CC63F]/15 rounded-full blur-3xl pointer-events-none" />
@@ -154,7 +199,7 @@ export default function CustomerRegisterPage() {
         </div>
       </div>
 
-      {/* Right Registration Form */}
+      {/* Right Form Container */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 lg:p-16 bg-[#FAFAF7]">
         <div className="max-w-lg w-full bg-white text-[#172B15] p-8 sm:p-10 rounded-3xl border border-[#2D5A1E]/15 shadow-xl space-y-6">
           
@@ -163,165 +208,227 @@ export default function CustomerRegisterPage() {
               Direct Onboarding
             </span>
             <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-[#172B15]">
-              Create <span className="font-serif italic text-[#2D5A1E]">Account</span>
+              {step === "register" ? (
+                <>Create <span className="font-serif italic text-[#2D5A1E]">Account</span></>
+              ) : (
+                <>Verify <span className="font-serif italic text-[#2D5A1E]">Your Email</span></>
+              )}
             </h1>
             <p className="text-xs text-neutral-500">
-              Provide your details to initiate authenticated client access.
+              {step === "register"
+                ? "Provide your details to initiate authenticated client access."
+                : `Enter the 6-digit passcode dispatched to ${formData.email}.`}
             </p>
           </div>
 
           {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2"
-            >
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
-            </motion.div>
+            </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            
-            {/* Username */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                Username *
-              </label>
-              <div className="relative">
-                <User className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  required
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  placeholder="e.g. janesmith"
-                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-                />
-              </div>
+          {infoMsg && !error && (
+            <div className="p-3.5 rounded-2xl bg-[#EAF7ED] border border-[#2D5A1E]/20 text-[#075637] text-xs flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              <span>{infoMsg}</span>
             </div>
+          )}
 
-            {/* First & Last Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {step === "register" ? (
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  First Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={handleChange}
-                  placeholder="Jane"
-                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  name="last_name"
-                  value={formData.last_name}
-                  onChange={handleChange}
-                  placeholder="Smith"
-                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-                />
-              </div>
-            </div>
-
-            {/* Email & Phone */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Email Address
+                  Username *
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                  <User className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
                   <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="jane@example.com"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Phone Number
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    placeholder="+91 98765 43210"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Password & Confirmation */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Password *
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-                  <input
-                    type="password"
+                    type="text"
                     required
-                    name="password"
-                    value={formData.password}
+                    name="username"
+                    value={formData.username}
                     onChange={handleChange}
-                    placeholder="Min. 8 chars"
+                    placeholder="janesmith"
                     className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    name="first_name"
+                    value={formData.first_name}
+                    onChange={handleChange}
+                    placeholder="Jane"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={formData.last_name}
+                    onChange={handleChange}
+                    placeholder="Smith"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Email Address *
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="email"
+                      required
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="jane@example.com"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Phone Number
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="+91 98765 43210"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="password"
+                      required
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Min. 8 chars"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="password"
+                      required
+                      name="confirm_password"
+                      value={formData.confirm_password}
+                      onChange={handleChange}
+                      placeholder="Repeat passcode"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md shadow-[#172B15]/10 mt-2 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Registering Account...</span>
+                  </>
+                ) : (
+                  <span>Continue to Verification</span>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtpSubmit} className="space-y-5">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Confirm Password *
+                  Verification Passcode *
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                  <KeyRound className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
                   <input
-                    type="password"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
                     required
-                    name="confirm_password"
-                    value={formData.confirm_password}
-                    onChange={handleChange}
-                    placeholder="Repeat passcode"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="123456"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-sm font-mono tracking-widest text-[#172B15] focus:outline-none focus:border-[#639E1F]"
                   />
                 </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md shadow-[#172B15]/10 mt-2 cursor-pointer"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Creating Account...</span>
-                </>
-              ) : (
-                <span>Complete Registration</span>
-              )}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading || otpCode.length < 6}
+                className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Activating Account...</span>
+                  </>
+                ) : (
+                  <span>Verify Email & Access Store</span>
+                )}
+              </button>
+
+              <div className="flex items-center justify-between text-xs text-neutral-500 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStep("register")}
+                  className="hover:text-[#172B15] underline cursor-pointer"
+                >
+                  Edit Information
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading}
+                  className="font-medium text-[#2D5A1E] hover:underline cursor-pointer"
+                >
+                  Resend Code
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="pt-4 border-t border-neutral-100 flex items-center justify-between text-xs">
             <span className="text-neutral-500">Already registered?</span>
@@ -335,7 +442,6 @@ export default function CustomerRegisterPage() {
 
         </div>
       </div>
-
     </div>
   );
 }

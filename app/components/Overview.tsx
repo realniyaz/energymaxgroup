@@ -118,7 +118,7 @@ export default function ProfessionalOverviewSection() {
               {/* Slide Navigation Dots */}
               <div className="absolute bottom-5 z-20 flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
                 {slideImages.map((_, dotIdx) => (
-                  <button
+                  <button suppressHydrationWarning
                     key={dotIdx}
                     onClick={() => setCurrentIndex(dotIdx)}
                     aria-label={`Go to slide ${dotIdx + 1}`}
