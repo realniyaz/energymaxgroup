@@ -108,12 +108,13 @@ export default function CheckoutPage({
     loadData();
   }, [checkoutId, isAuthenticated, authLoading, router]);
 
-  // 2. Countdown Timer
+  // 2. Countdown Timer (Fixed TypeScript TS2769: narrows expires_at to defined string)
   useEffect(() => {
-    if (!checkout?.expires_at) return;
+    const expiresAt = checkout?.expires_at;
+    if (!expiresAt) return;
 
     const interval = setInterval(() => {
-      const remainingMs = new Date(checkout.expires_at).getTime() - Date.now();
+      const remainingMs = new Date(expiresAt).getTime() - Date.now();
 
       if (remainingMs <= 0) {
         setTimeLeft("00:00");
