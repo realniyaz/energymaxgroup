@@ -28,7 +28,7 @@ export interface CheckoutResponse {
 
 /**
  * POST /api/v1/shop/checkout
- * Initializes a new checkout session from the active customer cart.
+ * Initializes a new checkout session.
  */
 export async function createCheckout(): Promise<CheckoutResponse> {
   const response = await customerClient.post<CheckoutResponse>(
@@ -38,36 +38,40 @@ export async function createCheckout(): Promise<CheckoutResponse> {
 }
 
 /**
- * GET /api/v1/shop/checkout/{checkout_id}
+ * GET /api/v1/shop/checkout/{checkout_public_id}
  */
-export async function getCheckout(checkoutId: string): Promise<CheckoutResponse> {
+export async function getCheckout(checkoutPublicId: string): Promise<CheckoutResponse> {
   const response = await customerClient.get<CheckoutResponse>(
-    `/api/v1/shop/checkout/${checkoutId}`
+    `/api/v1/shop/checkout/${checkoutPublicId}`
   );
   return response.data;
 }
 
 /**
- * POST /api/v1/shop/checkout/{checkout_id}/select-address
+ * PATCH /api/v1/shop/checkout/{checkout_public_id}/address
+ * Attaches the selected customer address to the checkout session.
  */
 export async function selectCheckoutAddress(
-  checkoutId: string,
+  checkoutPublicId: string,
   addressPublicId: string
 ): Promise<CheckoutResponse> {
-  const response = await customerClient.post<CheckoutResponse>(
-    `/api/v1/shop/checkout/${checkoutId}/select-address`,
-    { address_public_id: addressPublicId }
+  const response = await customerClient.patch<CheckoutResponse>(
+    `/api/v1/shop/checkout/${checkoutPublicId}/address`,
+    {
+      address_public_id: addressPublicId,
+      address_id: addressPublicId,
+    }
   );
   return response.data;
 }
 
 /**
- * POST /api/v1/shop/checkout/{checkout_id}/confirm
- * Locks items, prices, and secures the reservation.
+ * POST /api/v1/shop/checkout/{checkout_public_id}/confirm
+ * Locks prices and reserves stock allocations.
  */
-export async function confirmCheckout(checkoutId: string): Promise<CheckoutResponse> {
+export async function confirmCheckout(checkoutPublicId: string): Promise<CheckoutResponse> {
   const response = await customerClient.post<CheckoutResponse>(
-    `/api/v1/shop/checkout/${checkoutId}/confirm`
+    `/api/v1/shop/checkout/${checkoutPublicId}/confirm`
   );
   return response.data;
 }
