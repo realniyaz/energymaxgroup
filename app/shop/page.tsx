@@ -15,8 +15,6 @@ import {
   Star,
   Search,
   X,
-  ShoppingBag,
-  CheckCircle2,
   Activity
 } from "lucide-react";
 import LuxuryNavbar from "@/app/components/Navbar";
@@ -29,11 +27,8 @@ import {
   Category, 
   Subcategory 
 } from "@/lib/services/productService";
-import { useCart } from "@/context/cart-context";
 
 export default function ShopPage() {
-  const { addItem, loading: cartLoading } = useCart();
-
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -45,7 +40,6 @@ export default function ShopPage() {
   const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "newest">("featured");
   const [visibleCount, setVisibleCount] = useState<number>(9);
   const [wishlist, setWishlist] = useState<string[]>([]);
-  const [addingId, setAddingId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,19 +103,6 @@ export default function ShopPage() {
     );
   };
 
-  const handleQuickAdd = async (e: React.MouseEvent, productPublicId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setAddingId(productPublicId);
-    try {
-      await addItem(productPublicId, 1);
-    } catch (err) {
-      console.error("Cart addition failed:", err);
-    } finally {
-      setAddingId(null);
-    }
-  };
-
   const filteredProducts = useMemo(() => {
     return products
       .filter((item) => {
@@ -160,7 +141,7 @@ export default function ShopPage() {
     <div className="min-h-screen bg-[#FBFBFA] text-[#172B15] font-sans selection:bg-[#8CC63F]/30">
       <LuxuryNavbar />
 
-      {/* Header Banner - Clinical & Health Formulation Focus */}
+      {/* Header Banner */}
       <section className="relative py-16 sm:py-24 bg-[#172B15] text-white overflow-hidden border-b border-[#2D5A1E]/30">
         <div className="absolute inset-0 z-0 opacity-10 bg-[radial-gradient(#8CC63F_1px,transparent_1px)] [background-size:24px_24px]" />
         
@@ -303,7 +284,6 @@ export default function ShopPage() {
                       : 0;
 
                     const isWishlisted = wishlist.includes(product.public_id);
-                    const isItemAdding = addingId === product.public_id;
 
                     return (
                       <motion.div
@@ -377,11 +357,11 @@ export default function ShopPage() {
                             </p>
                           </div>
 
-                          {/* Price & Action Row */}
+                          {/* Price & Single Action Row */}
                           <div className="pt-3 border-t border-neutral-100 flex items-center justify-between gap-3">
                             <div className="space-y-0.5">
                               <span className="text-[9px] uppercase font-bold tracking-wider text-neutral-400 block">
-                                Price
+                                Starting At
                               </span>
                               <div className="flex items-baseline space-x-1.5">
                                 <span className="text-base sm:text-lg font-bold text-[#172B15]">
@@ -395,31 +375,14 @@ export default function ShopPage() {
                               </div>
                             </div>
 
-                            <div className="flex items-center space-x-2">
-                              {/* Quick Add To Bag */}
-                              <button
-                                type="button"
-                                onClick={(e) => handleQuickAdd(e, product.public_id)}
-                                disabled={isItemAdding || cartLoading}
-                                title="Add to Bag"
-                                className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/20 text-[#2D5A1E] hover:bg-[#F2F8ED] hover:border-[#639E1F] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
-                              >
-                                {isItemAdding ? (
-                                  <Loader2 className="w-4 h-4 animate-spin text-[#2D5A1E]" />
-                                ) : (
-                                  <ShoppingBag className="w-4 h-4" />
-                                )}
-                              </button>
-
-                              {/* View Product Details */}
-                              <Link
-                                href={`/shop/${product.slug || product.public_id}`}
-                                className="px-3.5 py-2.5 rounded-xl bg-[#172B15] text-white text-[11px] font-semibold uppercase tracking-wider hover:bg-[#2D5A1E] transition-all flex items-center space-x-1.5 shadow-sm"
-                              >
-                                <span>View</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </Link>
-                            </div>
+                            {/* View Formulation Details Button */}
+                            <Link
+                              href={`/shop/${product.slug || product.public_id}`}
+                              className="px-4 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#2D5A1E] transition-all flex items-center space-x-2 shadow-sm shrink-0"
+                            >
+                              <span>View</span>
+                              <ArrowRight className="w-3.5 h-3.5 text-[#8CC63F]" />
+                            </Link>
                           </div>
                         </div>
                       </motion.div>

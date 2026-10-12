@@ -26,6 +26,7 @@ import {
   Product, 
   ProductImage 
 } from "@/lib/services/productService";
+import ProductVariantsSection from "@/app/components/admin/ProductVariantsSection";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -389,6 +390,9 @@ export default function ProductDetailPage() {
         </div>
 
       </div>
+
+      {/* Product Variants Management Section */}
+      <ProductVariantsSection productPublicId={product.public_id} />
 
       {/* Lower Section: Search Engine Preview & Audit */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

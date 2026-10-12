@@ -5,7 +5,11 @@ import { guestClient } from "@/lib/guest-client";
 export interface GuestCartItem {
   public_id: string;
   product_public_id: string;
+  variant_public_id: string;
   product_name: string;
+  variant_sku?: string;
+  flavour?: string | null;
+  pack_size?: string | null;
   quantity: number;
   unit_price: number | string;
   subtotal: number | string;
@@ -20,6 +24,12 @@ export interface GuestCartResponse {
   expires_at: string;
 }
 
+export interface AddGuestCartItemPayload {
+  product_public_id: string;
+  variant_public_id: string;
+  quantity: number;
+}
+
 export async function getGuestCart(): Promise<GuestCartResponse> {
   const response = await guestClient.get<GuestCartResponse>("/api/v1/shop/cart");
   return response.data;
@@ -27,11 +37,16 @@ export async function getGuestCart(): Promise<GuestCartResponse> {
 
 export async function addGuestCartItem(
   productPublicId: string,
-  quantity: number
+  variantPublicId: string,
+  quantity: number = 1
 ): Promise<GuestCartResponse> {
   const response = await guestClient.post<GuestCartResponse>(
     "/api/v1/shop/cart/items",
-    { product_public_id: productPublicId, quantity }
+    {
+      product_public_id: productPublicId,
+      variant_public_id: variantPublicId,
+      quantity,
+    }
   );
   return response.data;
 }

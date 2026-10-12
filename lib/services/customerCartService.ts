@@ -6,8 +6,14 @@ import { getGuestCartToken, setGuestCartToken } from "@/lib/guest-client";
 export interface CustomerCartItem {
   public_id: string;
   product_public_id: string;
+  variant_public_id: string;
+  product_name?: string;
+  variant_sku?: string;
+  flavour?: string | null;
+  pack_size?: string | null;
   quantity: number;
   unit_price: number | string;
+  subtotal?: number | string;
 }
 
 export interface CustomerCartResponse {
@@ -19,6 +25,12 @@ export interface CustomerCartResponse {
   updated_at: string;
 }
 
+export interface AddCustomerCartItemPayload {
+  product_public_id: string;
+  variant_public_id: string;
+  quantity: number;
+}
+
 export async function getCustomerCart(): Promise<CustomerCartResponse> {
   const response = await customerClient.get<CustomerCartResponse>(
     "/api/v1/shop/customer/cart"
@@ -28,11 +40,16 @@ export async function getCustomerCart(): Promise<CustomerCartResponse> {
 
 export async function addCustomerCartItem(
   productPublicId: string,
-  quantity: number
+  variantPublicId: string,
+  quantity: number = 1
 ): Promise<CustomerCartResponse> {
   const response = await customerClient.post<CustomerCartResponse>(
     "/api/v1/shop/customer/cart/items",
-    { product_public_id: productPublicId, quantity }
+    {
+      product_public_id: productPublicId,
+      variant_public_id: variantPublicId,
+      quantity,
+    }
   );
   return response.data;
 }
@@ -80,7 +97,6 @@ export async function mergeGuestCartIntoCustomerCart(): Promise<CustomerCartResp
       }
     );
 
-    // Consume & remove local guest cart token upon successful backend merge
     setGuestCartToken(null);
     return response.data;
   } catch (error) {

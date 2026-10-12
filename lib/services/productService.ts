@@ -97,6 +97,33 @@ export interface Subcategory extends Omit<SubcategoryPayload, "category_public_i
   updated_at?: string;
 }
 
+
+export interface ProductVariantPayload {
+  sku: string;
+  flavour?: string | null;
+  pack_size?: string | null;
+  serving_size?: string | null;
+  servings_per_container?: number | null;
+  price: number;
+  mrp?: number | null;
+  cost_price?: number | null;
+  weight_grams?: number | null;
+  is_active: boolean;
+  display_order: number;
+}
+
+export interface ProductVariant extends ProductVariantPayload {
+  id: number;
+  public_id: string;
+  product_id: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductVariantListResponse {
+  items: ProductVariant[];
+  total: number;
+}
 /**
  * =========================================================
  * PUBLIC CATALOG QUERIES (guestClient with customerClient fallback)
@@ -393,4 +420,77 @@ export async function deleteSubcategory(publicId: string): Promise<null> {
     `/api/v1/catalog/subcategories/${publicId}`
   );
   return response.data;
+}
+
+export async function getProductVariants(
+  productPublicId: string
+): Promise<ProductVariant[]> {
+  const endpoint = `/api/v1/catalog/products/${productPublicId}/variants`;
+
+  try {
+    const res = await guestClient.get<any>(endpoint);
+    const data = res.data;
+    if (Array.isArray(data)) return data;
+    return data.items || [];
+  } catch (err: any) {
+    if (err.response?.status === 401) {
+      const retryRes = await customerClient.get<any>(endpoint);
+      const data = retryRes.data;
+      if (Array.isArray(data)) return data;
+      return data.items || [];
+    }
+    throw err;
+  }
+}
+
+// 2. POST /api/v1/catalog/products/{product_public_id}/variants
+export async function createProductVariant(
+  productPublicId: string,
+  payload: ProductVariantPayload
+): Promise<ProductVariant> {
+  const res = await apiClient.post<ProductVariant>(
+    `/api/v1/catalog/products/${productPublicId}/variants`,
+    payload
+  );
+  return res.data;
+}
+
+// 3. GET /api/v1/catalog/products/variants/{public_id}
+export async function getProductVariantByPublicId(
+  variantPublicId: string
+): Promise<ProductVariant> {
+  const endpoint = `/api/v1/catalog/products/variants/${variantPublicId}`;
+
+  try {
+    const res = await guestClient.get<ProductVariant>(endpoint);
+    return res.data;
+  } catch (err: any) {
+    if (err.response?.status === 401) {
+      const retryRes = await customerClient.get<ProductVariant>(endpoint);
+      return retryRes.data;
+    }
+    throw err;
+  }
+}
+
+// 4. PATCH /api/v1/catalog/products/variants/{public_id}
+export async function updateProductVariant(
+  variantPublicId: string,
+  payload: Partial<ProductVariantPayload>
+): Promise<ProductVariant> {
+  const res = await apiClient.patch<ProductVariant>(
+    `/api/v1/catalog/products/variants/${variantPublicId}`,
+    payload
+  );
+  return res.data;
+}
+
+// 5. DELETE /api/v1/catalog/products/variants/{public_id}
+export async function deleteProductVariant(
+  variantPublicId: string
+): Promise<null> {
+  const res = await apiClient.delete<null>(
+    `/api/v1/catalog/products/variants/${variantPublicId}`
+  );
+  return res.data;
 }

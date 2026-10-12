@@ -438,7 +438,7 @@ export default function LuxuryNavbar() {
             <div className="flex items-center space-x-3 sm:space-x-5">
               <div className="hidden md:flex items-center relative" ref={searchContainerRef}>
                 <div className="relative">
-                  <input
+                  <input suppressHydrationWarning
                     type="text"
                     value={searchQuery}
                     onFocus={() => setIsSearchFocused(true)}
@@ -523,7 +523,7 @@ export default function LuxuryNavbar() {
               </div>
 
               {/* Reactive Shopping Bag Button */}
-              <button
+              <button suppressHydrationWarning
                 type="button"
                 onClick={() => setCartOpen(true)}
                 aria-label="Open Shopping Bag"
@@ -537,7 +537,7 @@ export default function LuxuryNavbar() {
                 )}
               </button>
 
-              <button
+              <button suppressHydrationWarning
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 className="lg:hidden p-2 rounded-lg text-[#172B15] hover:bg-[#2D5A1E]/10 transition-colors focus:outline-none"
                 aria-label="Toggle mobile menu"

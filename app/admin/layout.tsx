@@ -20,7 +20,14 @@ import {
   ChevronDown,
   User,
   Settings,
-  ShoppingBag
+  ShoppingBag,
+  Factory,
+  FactoryIcon,
+  LucideFactory,
+  ShoppingCartIcon,
+  IndianRupee,
+  Notebook,
+  Search
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
 
@@ -105,7 +112,20 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
       ]
     },
     { href: "/admin/categories", label: "Categories", icon: Network },
-    { href: "/admin/products", label: "Product Inventory", icon: Package },
+    { href: "/admin/products", label: "Products", icon: Package },
+    { 
+      href: "/admin/inventory", 
+      label: "Inventory", 
+      icon: LucideFactory,
+      children: [
+        { href: "/admin/inventory/warehouses", label: "Warehouses", icon: FactoryIcon },
+        { href: "/admin/inventory/stock", label: "Stock IN-OUT", icon: Notebook },
+        { href: "/admin/inventory/balances", label: "Stock Balances", icon: ShoppingCartIcon },
+        { href: "/admin/inventory/movements", label: "Movements", icon: IndianRupee  },
+        { href: "/admin/inventory/reservations", label: "Reservations", icon: FactoryIcon  },
+        { href: "/admin/inventory/adjustments", label: "Adjustments", icon: Search  },
+      ]
+    },
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
     { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
     { href: "/admin/sessions", label: "Active Sessions", icon: ShieldAlert },
