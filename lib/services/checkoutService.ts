@@ -1,5 +1,5 @@
 // lib/services/checkoutService.ts
-import { apiClient } from "@/lib/api-client";
+import { customerClient } from "@/lib/customer-client";
 
 export interface CheckoutItem {
   public_id: string;
@@ -28,10 +28,10 @@ export interface CheckoutResponse {
 
 /**
  * POST /api/v1/shop/checkout
- * Initializes a new checkout session from the active cart.
+ * Initializes a new checkout session from the active customer cart.
  */
 export async function createCheckout(): Promise<CheckoutResponse> {
-  const response = await apiClient.post<CheckoutResponse>(
+  const response = await customerClient.post<CheckoutResponse>(
     "/api/v1/shop/checkout"
   );
   return response.data;
@@ -41,7 +41,7 @@ export async function createCheckout(): Promise<CheckoutResponse> {
  * GET /api/v1/shop/checkout/{checkout_id}
  */
 export async function getCheckout(checkoutId: string): Promise<CheckoutResponse> {
-  const response = await apiClient.get<CheckoutResponse>(
+  const response = await customerClient.get<CheckoutResponse>(
     `/api/v1/shop/checkout/${checkoutId}`
   );
   return response.data;
@@ -54,7 +54,7 @@ export async function selectCheckoutAddress(
   checkoutId: string,
   addressPublicId: string
 ): Promise<CheckoutResponse> {
-  const response = await apiClient.post<CheckoutResponse>(
+  const response = await customerClient.post<CheckoutResponse>(
     `/api/v1/shop/checkout/${checkoutId}/select-address`,
     { address_public_id: addressPublicId }
   );
@@ -63,10 +63,10 @@ export async function selectCheckoutAddress(
 
 /**
  * POST /api/v1/shop/checkout/{checkout_id}/confirm
- * Locks items, prices, and creates the inventory reservation.
+ * Locks items, prices, and secures the reservation.
  */
 export async function confirmCheckout(checkoutId: string): Promise<CheckoutResponse> {
-  const response = await apiClient.post<CheckoutResponse>(
+  const response = await customerClient.post<CheckoutResponse>(
     `/api/v1/shop/checkout/${checkoutId}/confirm`
   );
   return response.data;
