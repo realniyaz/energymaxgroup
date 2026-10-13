@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -150,7 +150,7 @@ export default function ProfessionalProductGallery() {
     if (targetChild) {
       isScrollingRef.current = true;
       container.scrollTo({
-        left: targetChild.offsetLeft - 24,
+        left: targetChild.offsetLeft - 20,
         behavior: "smooth",
       });
       setMobileActiveIndex(index);
@@ -166,7 +166,7 @@ export default function ProfessionalProductGallery() {
   );
 
   return (
-    <section className="relative py-16 sm:py-24 lg:py-28 bg-[#FAFAF7] overflow-hidden select-none">
+    <section className="relative py-16 sm:py-24 lg:py-28 bg-[#FAFAF7] overflow-hidden">
       {/* Background Soft Glow */}
       <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center">
         <div className="w-[600px] h-[600px] sm:w-[800px] sm:h-[800px] bg-[#8CC63F]/[0.04] rounded-full blur-[140px]" />
@@ -219,13 +219,11 @@ export default function ProfessionalProductGallery() {
           </div>
         </div>
 
-        {/* ============================================================== */}
-        {/* MOBILE VIEW: Visual swipe cue line                             */}
-        {/* ============================================================== */}
+        {/* MOBILE VIEW: Visual swipe cue line */}
         <div className="lg:hidden flex items-center justify-between px-1 mb-4">
           <div className="flex items-center space-x-2 text-[10px] uppercase tracking-widest font-bold text-[#639E1F]">
             <MoveHorizontal className="w-3.5 h-3.5 animate-pulse text-[#639E1F]" />
-            <span>Swipe to explore flavors</span>
+            <span>Swipe horizontally or scroll down</span>
           </div>
 
           <div className="flex items-center space-x-1.5 text-[10px] font-mono text-neutral-400">
@@ -245,9 +243,7 @@ export default function ProfessionalProductGallery() {
           />
         </div>
 
-        {/* ============================================================== */}
-        {/* DESKTOP VIEW: 3-Cards Carousel with Framer Transitions          */}
-        {/* ============================================================== */}
+        {/* DESKTOP VIEW: 3-Cards Carousel with Framer Transitions */}
         <div className="hidden lg:block overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
@@ -326,13 +322,11 @@ export default function ProfessionalProductGallery() {
           </AnimatePresence>
         </div>
 
-        {/* ============================================================== */}
-        {/* MOBILE VIEW: Hardware-accelerated Swipe & Snap Container       */}
-        {/* ============================================================== */}
+        {/* MOBILE VIEW: Unlocked Vertical & Horizontal Native Gestures */}
         <div
           ref={mobileScrollRef}
           onScroll={handleMobileScroll}
-          className="lg:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none pb-4 -mx-5 px-5 touch-pan-x"
+          className="lg:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none pb-6 -mx-5 px-5 touch-auto overscroll-x-contain overscroll-y-auto"
           style={{
             WebkitOverflowScrolling: "touch",
             scrollPaddingLeft: "20px",
@@ -403,7 +397,7 @@ export default function ProfessionalProductGallery() {
         </div>
 
         {/* Mobile Interactive Indicator Dots */}
-        <div className="flex lg:hidden items-center justify-center space-x-2 pt-3">
+        <div className="flex lg:hidden items-center justify-center space-x-2 pt-2">
           {catalogProducts.map((_, idx) => (
             <button
               key={idx}

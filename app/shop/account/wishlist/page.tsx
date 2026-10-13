@@ -1,7 +1,7 @@
 // app/shop/account/wishlist/page.tsx
 "use client";
 
-import React from "react";
+import React, { useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -18,6 +18,13 @@ import { useCustomerAuth } from "@/context/customer-auth-context";
 export default function CustomerWishlistPage() {
   const { authLoading } = useCustomerAuth() as any;
   const { wishlist, loading, toggleWishlist } = useWishlist();
+  const [, startTransition] = useTransition();
+
+  const handleRemove = (productId: number, publicId?: string) => {
+    startTransition(() => {
+      toggleWishlist(productId, publicId);
+    });
+  };
 
   if (authLoading || (loading && wishlist.length === 0)) {
     return (
@@ -32,13 +39,14 @@ export default function CustomerWishlistPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-8 sm:py-12 px-4 sm:px-6 lg:px-12 font-sans">
-      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
         
-        {/* Top Action Bar */}
+        {/* Top Navigation & Action Row */}
         <div className="flex items-center justify-between gap-3 pb-2">
           <Link
             href="/"
-            className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-white border border-[#2D5A1E]/15 text-xs font-semibold text-[#172B15] hover:bg-[#F2F8ED] transition-all shadow-xs"
+            prefetch={false}
+            className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-white border border-[#2D5A1E]/15 text-xs font-semibold text-[#172B15] hover:bg-[#F2F8ED] transition-colors shadow-2xs"
           >
             <Home className="w-3.5 h-3.5 text-[#639E1F] shrink-0" />
             <span>Return to Home</span>
@@ -46,14 +54,15 @@ export default function CustomerWishlistPage() {
 
           <Link
             href="/shop"
-            className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#172B15] transition-all shadow-xs"
+            prefetch={false}
+            className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#172B15] transition-colors shadow-2xs"
           >
             <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
             <span>Browse Catalog</span>
           </Link>
         </div>
 
-        {/* Page Title */}
+        {/* Page Header */}
         <div className="border-b border-[#2D5A1E]/15 pb-6">
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
             Customer Sanctuary
@@ -62,13 +71,13 @@ export default function CustomerWishlistPage() {
             My Wishlist ({wishlist.length})
           </h1>
           <p className="text-xs text-neutral-600 mt-1">
-            Keep track of custom formulations and items for your regimen.
+            Keep track of custom formulations and items for your daily health routine.
           </p>
         </div>
 
         {/* Empty State */}
         {wishlist.length === 0 ? (
-          <div className="bg-white rounded-3xl p-10 sm:p-14 border border-[#2D5A1E]/15 shadow-sm text-center max-w-md mx-auto space-y-4">
+          <div className="bg-white rounded-3xl p-10 sm:p-14 border border-[#2D5A1E]/15 shadow-xs text-center max-w-md mx-auto space-y-4 animate-in fade-in duration-200">
             <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center mx-auto text-red-500">
               <Heart className="w-7 h-7" />
             </div>
@@ -80,21 +89,32 @@ export default function CustomerWishlistPage() {
             </p>
             <Link
               href="/shop"
-              className="inline-flex items-center space-x-2 px-6 py-3 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#172B15] transition-all shadow-md"
+              prefetch={false}
+              className="inline-flex items-center space-x-2 px-6 py-3 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#172B15] transition-all shadow-md active:scale-95"
             >
               <span>Explore Catalog</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         ) : (
-          /* Grid View of Wishlist Items */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {wishlist.map((item) => {
+          /* High-Performance Products Grid */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-7">
+            {wishlist.map((item, idx) => {
               const product = item.product;
               const numericPrice = product?.price ? Number(product.price) : 0;
               const numericMrp = product?.mrp ? Number(product.mrp) : 0;
-              
-              // Resolve numeric product ID correctly
+              const discountPercent =
+                numericMrp > numericPrice && numericMrp > 0
+                  ? Math.round(((numericMrp - numericPrice) / numericMrp) * 100)
+                  : 0;
+
+              // Resolve image source cleanly
+              const displayImageUrl =
+                product?.primary_image_url ||
+                (product as any)?.images?.[0]?.image_url ||
+                "/prod1.png";
+
+              // Resolve numeric product ID safely
               const resolvedProductId =
                 (product as any)?.id ||
                 (item as any)?.product_id ||
@@ -103,38 +123,66 @@ export default function CustomerWishlistPage() {
               return (
                 <div
                   key={item.public_id}
-                  className="bg-white rounded-3xl border border-[#2D5A1E]/15 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
+                  className="bg-white rounded-3xl border border-[#2D5A1E]/15 overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between group"
                 >
                   <div>
-                    {/* Image Area */}
-                    <Link
-                      href={`/shop/${product?.slug || product?.public_id}`}
-                      className="relative w-full h-[220px] bg-[#F2F8ED]/60 flex items-center justify-center p-4 border-b border-[#2D5A1E]/10 block"
-                    >
-                      <Image
-                        src={product?.primary_image_url || "/prod1.png"}
-                        alt={product?.name || "Product Image"}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-                        className="object-contain p-4 group-hover:scale-105 transition-transform duration-500 drop-shadow-sm"
-                      />
-                    </Link>
+                    {/* Full-Display Image Showcase */}
+                    <div className="relative">
+                      <Link
+                        href={`/shop/${product?.slug || product?.public_id}`}
+                        prefetch={false}
+                        className="relative w-full aspect-[4/3] sm:aspect-square bg-[#F4F6F4] overflow-hidden flex items-center justify-center border-b border-neutral-100 block"
+                      >
+                        <Image
+                          src={displayImageUrl}
+                          alt={product?.name || "Product Image"}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          quality={75}
+                          loading={idx < 3 ? "eager" : "lazy"}
+                          className="object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
+                        />
 
-                    {/* Content Details */}
-                    <div className="p-5 space-y-2">
-                      <Link href={`/shop/${product?.slug || product?.public_id}`}>
+                        {discountPercent > 0 && (
+                          <div className="absolute top-3.5 left-3.5 z-10 pointer-events-none">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[#8CC63F]/90 backdrop-blur-xs border border-[#8CC63F] text-[#172B15] text-[9px] font-bold tracking-wider uppercase shadow-xs">
+                              {discountPercent}% OFF
+                            </span>
+                          </div>
+                        )}
+                      </Link>
+
+                      {/* Quick Delete Wishlist Trigger */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(resolvedProductId, product?.public_id)}
+                        className="absolute top-3.5 right-3.5 z-10 w-9 h-9 rounded-full bg-white/90 border border-[#2D5A1E]/15 text-neutral-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                        title="Remove from wishlist"
+                        aria-label="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Product Metadata */}
+                    <div className="p-4 sm:p-5 space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#639E1F] block truncate">
+                        {(product as any)?.brand_name || "maXilin Series"}
+                      </span>
+
+                      <Link href={`/shop/${product?.slug || product?.public_id}`} prefetch={false}>
                         <h3 className="text-base font-medium text-[#172B15] group-hover:text-[#639E1F] transition-colors line-clamp-1">
-                          {product?.name}
+                          {product?.name || "Formulation"}
                         </h3>
                       </Link>
 
-                      <div className="flex items-baseline space-x-2">
-                        <span className="text-base font-serif font-bold text-[#172B15]">
-                          ₹{numericPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      <div className="flex items-baseline space-x-2 pt-1">
+                        <span className="text-base sm:text-lg font-bold text-[#172B15]">
+                          ₹{numericPrice.toLocaleString("en-IN")}
                         </span>
                         {numericMrp > numericPrice && (
-                          <span className="text-xs text-neutral-400 line-through">
-                            ₹{numericMrp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          <span className="text-xs text-neutral-400 line-through font-mono">
+                            ₹{numericMrp.toLocaleString("en-IN")}
                           </span>
                         )}
                       </div>
@@ -142,22 +190,15 @@ export default function CustomerWishlistPage() {
                   </div>
 
                   {/* Actions Bar */}
-                  <div className="p-5 pt-0 flex items-center gap-2">
+                  <div className="p-4 sm:p-5 pt-0">
                     <Link
                       href={`/shop/${product?.slug || product?.public_id}`}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#172B15] text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center space-x-1.5 hover:bg-[#2D5A1E] transition-colors"
+                      prefetch={false}
+                      className="w-full py-2.5 px-4 rounded-xl bg-[#172B15] text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center space-x-1.5 hover:bg-[#2D5A1E] transition-all shadow-xs group/btn"
                     >
-                      <span>View Item</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <span>View Formulation</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#8CC63F] group-hover/btn:translate-x-0.5 transition-transform" />
                     </Link>
-
-                    <button
-                      onClick={() => toggleWishlist(resolvedProductId, product?.public_id)}
-                      className="p-2.5 rounded-xl border border-neutral-200 text-neutral-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors cursor-pointer"
-                      title="Remove from wishlist"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
               );
