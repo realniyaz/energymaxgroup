@@ -1,7 +1,6 @@
-// app/shop/auth/register/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,6 +16,8 @@ import {
   AlertCircle,
   CheckCircle,
   KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
@@ -36,10 +37,16 @@ export default function CustomerRegisterPage() {
     confirm_password: "",
   });
 
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
+
+  const [, startTransition] = useTransition();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -77,7 +84,7 @@ export default function CustomerRegisterPage() {
         password: formData.password,
       });
 
-      // Dispatch OTP code for verification
+      // Dispatch OTP code for registration verification
       await requestOtp(formData.email.trim().toLowerCase(), "email", "registration");
       setInfoMsg(`A 6-digit verification code was sent to ${formData.email.trim().toLowerCase()}.`);
       setStep("verify_otp");
@@ -107,7 +114,9 @@ export default function CustomerRegisterPage() {
         "email",
         "registration"
       );
-      router.push("/shop");
+      startTransition(() => {
+        router.push("/shop");
+      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(
@@ -135,15 +144,23 @@ export default function CustomerRegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col lg:flex-row text-[#172B15]">
-      {/* Left Brand Panel */}
-      <div className="relative hidden lg:flex lg:w-5/12 bg-[#172B15] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden border-r border-[#2D5A1E]/30">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#8CC63F]/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#2D5A1E]/40 rounded-full blur-3xl pointer-events-none" />
+      {/* Left Brand Showcase Panel */}
+      <div className="relative hidden lg:flex lg:w-5/12 bg-[#172B15] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden border-r border-[#2D5A1E]/30 select-none">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#8CC63F]/15 rounded-full blur-3xl pointer-events-none will-change-transform" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#2D5A1E]/40 rounded-full blur-3xl pointer-events-none will-change-transform" />
 
+        {/* Brand Header */}
         <div className="relative z-10 flex items-center justify-between">
-          <Link href="/shop" className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-white/10 rounded-2xl p-2 border border-white/15 backdrop-blur-md flex items-center justify-center">
-              <Image src="/logo1.png" alt="EnergyMax" width={32} height={32} className="object-contain" priority />
+          <Link href="/shop" prefetch={false} className="flex items-center space-x-3 group">
+            <div className="w-10 h-10 bg-white/10 rounded-2xl p-2 border border-white/15 backdrop-blur-xs flex items-center justify-center shadow-xs group-hover:border-[#8CC63F]/50 transition-colors">
+              <Image 
+                src="/logo1.png" 
+                alt="EnergyMax" 
+                width={32} 
+                height={32} 
+                className="object-contain" 
+                priority 
+              />
             </div>
             <div>
               <span className="text-xs font-bold uppercase tracking-[0.25em] text-[#8CC63F] block">
@@ -157,6 +174,7 @@ export default function CustomerRegisterPage() {
 
           <Link
             href="/shop"
+            prefetch={false}
             className="text-xs font-bold uppercase tracking-wider text-neutral-400 hover:text-[#8CC63F] transition-colors flex items-center space-x-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -164,8 +182,9 @@ export default function CustomerRegisterPage() {
           </Link>
         </div>
 
+        {/* Brand Story Highlights */}
         <div className="relative z-10 my-auto py-10 space-y-6 max-w-sm">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30 backdrop-blur-md">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30 backdrop-blur-xs">
             <Sparkles className="w-3.5 h-3.5 text-[#8CC63F]" />
             <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-[#8CC63F]">
               Direct Membership
@@ -221,15 +240,16 @@ export default function CustomerRegisterPage() {
             </p>
           </div>
 
+          {/* Zero-Runtime Alerts */}
           {error && (
-            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2 animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {infoMsg && !error && (
-            <div className="p-3.5 rounded-2xl bg-[#EAF7ED] border border-[#2D5A1E]/20 text-[#075637] text-xs flex items-center space-x-2">
+            <div className="p-3.5 rounded-2xl bg-[#EAF7ED] border border-[#2D5A1E]/20 text-[#075637] text-xs flex items-center space-x-2 animate-in fade-in duration-200">
               <CheckCircle className="w-4 h-4 shrink-0" />
               <span>{infoMsg}</span>
             </div>
@@ -247,10 +267,11 @@ export default function CustomerRegisterPage() {
                     type="text"
                     required
                     name="username"
+                    autoComplete="username"
                     value={formData.username}
                     onChange={handleChange}
                     placeholder="janesmith"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                 </div>
               </div>
@@ -264,10 +285,11 @@ export default function CustomerRegisterPage() {
                     type="text"
                     required
                     name="first_name"
+                    autoComplete="given-name"
                     value={formData.first_name}
                     onChange={handleChange}
                     placeholder="Jane"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                 </div>
                 <div className="space-y-1">
@@ -277,10 +299,11 @@ export default function CustomerRegisterPage() {
                   <input
                     type="text"
                     name="last_name"
+                    autoComplete="family-name"
                     value={formData.last_name}
                     onChange={handleChange}
                     placeholder="Smith"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                 </div>
               </div>
@@ -296,10 +319,11 @@ export default function CustomerRegisterPage() {
                       type="email"
                       required
                       name="email"
+                      autoComplete="email"
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="jane@example.com"
-                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                     />
                   </div>
                 </div>
@@ -312,48 +336,69 @@ export default function CustomerRegisterPage() {
                     <input
                       type="tel"
                       name="phone"
+                      autoComplete="tel"
                       value={formData.phone}
                       onChange={handleChange}
                       placeholder="+91 98765 43210"
-                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Password and Confirm Password with Eye Toggle Controls */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
                     Password *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       required
                       name="password"
+                      autoComplete="new-password"
                       value={formData.password}
                       onChange={handleChange}
                       placeholder="Min. 8 chars"
-                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 pr-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#172B15] focus:outline-none cursor-pointer"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
                     Confirm Password *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                     <input
-                      type="password"
+                      type={showConfirmPassword ? "text" : "password"}
                       required
                       name="confirm_password"
+                      autoComplete="new-password"
                       value={formData.confirm_password}
                       onChange={handleChange}
                       placeholder="Repeat passcode"
-                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                      className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 pr-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#172B15] focus:outline-none cursor-pointer"
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -361,7 +406,7 @@ export default function CustomerRegisterPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md shadow-[#172B15]/10 mt-2 cursor-pointer"
+                className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md shadow-[#172B15]/10 mt-2 cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -380,17 +425,18 @@ export default function CustomerRegisterPage() {
                   Verification Passcode *
                 </label>
                 <div className="relative">
-                  <KeyRound className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                  <KeyRound className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   <input
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
+                    autoComplete="one-time-code"
                     maxLength={6}
                     required
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                     placeholder="123456"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-sm font-mono tracking-widest text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-sm font-mono tracking-widest text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                 </div>
               </div>
@@ -398,7 +444,7 @@ export default function CustomerRegisterPage() {
               <button
                 type="submit"
                 disabled={loading || otpCode.length < 6}
-                className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md cursor-pointer"
+                className="w-full py-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-md cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -430,10 +476,12 @@ export default function CustomerRegisterPage() {
             </form>
           )}
 
+          {/* Sign In Redirect Link */}
           <div className="pt-4 border-t border-neutral-100 flex items-center justify-between text-xs">
             <span className="text-neutral-500">Already registered?</span>
             <Link
               href="/shop/auth/login"
+              prefetch={false}
               className="font-bold text-[#2D5A1E] hover:text-[#639E1F] transition-colors"
             >
               Sign In Instead →

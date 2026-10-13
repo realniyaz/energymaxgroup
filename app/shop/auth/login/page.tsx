@@ -1,4 +1,3 @@
-// app/shop/auth/login/page.tsx
 "use client";
 
 import React, { useState, Suspense } from "react";
@@ -104,16 +103,15 @@ function CustomerLoginForm() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col lg:flex-row text-[#172B15]">
-      {/* LEFT SHOWCASE: Pre-rendered, GPU-accelerated decorative visuals */}
+      {/* Left Visual Panel: Optimized GPU-accelerated backdrop */}
       <div className="relative hidden lg:flex lg:w-1/2 bg-[#172B15] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden border-r border-[#2D5A1E]/30 select-none">
-        {/* Hardware-accelerated background ambient glows */}
         <div className="absolute -top-24 -left-24 w-80 h-80 bg-[#8CC63F]/15 rounded-full blur-2xl pointer-events-none will-change-transform" />
         <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-[#2D5A1E]/40 rounded-full blur-2xl pointer-events-none will-change-transform" />
 
         {/* Brand Header */}
         <div className="relative z-10 flex items-center justify-between">
           <Link href="/shop" prefetch={false} className="flex items-center space-x-3 group">
-            <div className="w-11 h-11 bg-white/10 rounded-2xl p-2 border border-white/15 flex items-center justify-center shadow-sm group-hover:border-[#8CC63F]/50 transition-colors">
+            <div className="w-11 h-11 bg-white/10 rounded-2xl p-2 border border-white/15 flex items-center justify-center shadow-xs group-hover:border-[#8CC63F]/50 transition-colors">
               <Image
                 src="/logo1.png"
                 alt="EnergyMax Logo"
@@ -143,7 +141,7 @@ function CustomerLoginForm() {
           </Link>
         </div>
 
-        {/* Hero Card */}
+        {/* Hero Showcase Card */}
         <div className="relative z-10 my-auto py-8 space-y-8 max-w-lg">
           <div className="space-y-3">
             <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30">
@@ -195,7 +193,7 @@ function CustomerLoginForm() {
         </div>
       </div>
 
-      {/* RIGHT AUTHENTICATION PANEL */}
+      {/* Right Authentication Panel */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 lg:p-16 bg-[#FAFAF7]">
         <div className="max-w-md w-full bg-white text-[#172B15] p-8 sm:p-10 rounded-3xl border border-[#2D5A1E]/15 shadow-lg space-y-6 relative">
           
@@ -225,7 +223,7 @@ function CustomerLoginForm() {
             </p>
           </div>
 
-          {/* Partner Ecosystem Prompt */}
+          {/* Partner Ecosystem Banner */}
           <div className="p-3.5 rounded-2xl bg-[#F2F8ED] border border-[#639E1F]/25 flex items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-xl bg-[#639E1F]/15 text-[#2D5A1E] flex items-center justify-center shrink-0">
@@ -248,7 +246,7 @@ function CustomerLoginForm() {
               href="https://energymaxgroup.com/cabinet"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-white border border-[#2D5A1E]/15 text-[#172B15] text-[10px] font-bold uppercase tracking-wider hover:bg-[#172B15] hover:text-white transition-all shadow-sm shrink-0 flex items-center space-x-1"
+              className="px-3 py-1.5 rounded-xl bg-white border border-[#2D5A1E]/15 text-[#172B15] text-[10px] font-bold uppercase tracking-wider hover:bg-[#172B15] hover:text-white transition-all shadow-xs shrink-0 flex items-center space-x-1"
             >
               <span>Partner Sign In</span>
               <ExternalLink className="w-2.5 h-2.5" />
@@ -265,7 +263,7 @@ function CustomerLoginForm() {
               }}
               className={`py-2.5 rounded-xl transition-all cursor-pointer ${
                 authMode === "password"
-                  ? "bg-white text-[#172B15] shadow-sm"
+                  ? "bg-white text-[#172B15] shadow-xs"
                   : "text-neutral-400 hover:text-[#172B15]"
               }`}
             >
@@ -279,7 +277,7 @@ function CustomerLoginForm() {
               }}
               className={`py-2.5 rounded-xl transition-all cursor-pointer ${
                 authMode === "otp"
-                  ? "bg-white text-[#172B15] shadow-sm"
+                  ? "bg-white text-[#172B15] shadow-xs"
                   : "text-neutral-400 hover:text-[#172B15]"
               }`}
             >
@@ -287,15 +285,15 @@ function CustomerLoginForm() {
             </button>
           </div>
 
-          {/* Error Alert: Native lightweight CSS transition (No Framer Motion overhead) */}
+          {/* Zero-Runtime Error Alert */}
           {error && (
-            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2 animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* PASSWORD FORM */}
+          {/* Password Form */}
           {authMode === "password" && (
             <form onSubmit={handlePasswordLogin} className="space-y-4">
               <div className="space-y-1.5">
@@ -318,16 +316,17 @@ function CustomerLoginForm() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  Password *
-                </label>
-                <Link
-                  href="/shop/auth/forgot-password"
-                  className="text-[10px] font-semibold text-[#639E1F] hover:underline cursor-pointer"
-                >
-                  Forgot passcode?
-                </Link>
-              </div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                    Password *
+                  </label>
+                  <Link
+                    href="/shop/auth/forgot-password"
+                    prefetch={false}
+                    className="text-[10px] font-semibold text-[#639E1F] hover:underline cursor-pointer"
+                  >
+                    Forgot passcode?
+                  </Link>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
                   <input
@@ -345,7 +344,7 @@ function CustomerLoginForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm cursor-pointer"
+                className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -359,7 +358,7 @@ function CustomerLoginForm() {
             </form>
           )}
 
-          {/* OTP FORM */}
+          {/* Email OTP Form */}
           {authMode === "otp" && (
             <div className="space-y-4">
               {otpSuccessMsg && (
@@ -392,7 +391,7 @@ function CustomerLoginForm() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 rounded-2xl bg-[#639E1F] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#528419] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm cursor-pointer"
+                    className="w-full py-3.5 rounded-2xl bg-[#639E1F] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#528419] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -442,7 +441,7 @@ function CustomerLoginForm() {
                   <button
                     type="submit"
                     disabled={loading || otpCode.length < 6}
-                    className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm cursor-pointer"
+                    className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -469,11 +468,12 @@ function CustomerLoginForm() {
             </div>
           )}
 
-          {/* Registration Link */}
+          {/* Registration Navigation Link */}
           <div className="pt-4 border-t border-neutral-100 flex items-center justify-between text-xs">
             <span className="text-neutral-500">First time client?</span>
             <Link
               href="/shop/auth/register"
+              prefetch={false}
               className="font-bold text-[#2D5A1E] hover:text-[#639E1F] transition-colors"
             >
               Create Account →

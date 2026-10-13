@@ -1,18 +1,16 @@
-// app/shop/[slug]/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import dynamic from "next/dynamic";
 import { 
   Check, 
   ShieldCheck, 
   Star, 
   Truck, 
   RefreshCw, 
-  Heart, 
   Share2, 
   ShoppingBag, 
   MessageCircle, 
@@ -23,19 +21,15 @@ import {
   Maximize2, 
   X, 
   ChevronRight, 
-  ChevronLeft,
-  Leaf,
-  ArrowRight,
-  Loader2,
-  Copy,
-  Activity,
-  Zap,
-  Layers,
-  Ban
+  ChevronLeft, 
+  Leaf, 
+  Loader2, 
+  Copy, 
+  Activity, 
+  Zap, 
+  Layers, 
+  Ban 
 } from "lucide-react";
-import LuxuryNavbar from "@/app/components/Navbar";
-import LuxuryFooter from "@/app/components/LuxuryFooter";
-import WishlistHeartButton from "@/app/components/shop/WishlistHeartButton";
 import { 
   getProductByPublicId, 
   getProducts, 
@@ -46,7 +40,14 @@ import {
 } from "@/lib/services/productService";
 import { useCart } from "@/context/cart-context";
 import { useCustomerAuth } from "@/context/customer-auth-context";
-import { useWishlist } from "@/context/wishlist-context";
+
+// Lazy-load non-critical chrome and widgets
+const LuxuryNavbar = dynamic(() => import("@/app/components/Navbar"), { ssr: true });
+const LuxuryFooter = dynamic(() => import("@/app/components/LuxuryFooter"), { ssr: false });
+const WishlistHeartButton = dynamic(
+  () => import("@/app/components/shop/WishlistHeartButton"),
+  { ssr: false }
+);
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -55,7 +56,6 @@ export default function ProductDetailPage() {
 
   const { addItem, loading: cartLoading } = useCart();
   const { isAuthenticated } = useCustomerAuth();
-  const { isInWishlist, toggleWishlist } = useWishlist();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -64,7 +64,7 @@ export default function ProductDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
-  
+
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
@@ -74,9 +74,12 @@ export default function ProductDetailPage() {
   const [isExpressCheckingOut, setIsExpressCheckingOut] = useState<boolean>(false);
   const [actionSuccess, setActionSuccess] = useState<boolean>(false);
 
-  // 1. Ingestion: Resolve Product & Product Variants
+  const [, startTransition] = useTransition();
+
+  // Ingestion: Concurrently resolve product details and child variants
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     async function loadProduct() {
       if (!slugParam) return;
@@ -86,13 +89,9 @@ export default function ProductDetailPage() {
 
         let targetProduct: Product | null = null;
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugParam);
-        
+
         if (isUUID) {
-          try {
-            targetProduct = await getProductByPublicId(slugParam);
-          } catch {
-            targetProduct = null;
-          }
+          targetProduct = await getProductByPublicId(slugParam).catch(() => null);
         }
 
         if (!targetProduct) {
@@ -113,20 +112,16 @@ export default function ProductDetailPage() {
 
         setProduct(targetProduct);
 
-        // Fetch variants for this product
-        try {
-          const fetchedVariants = await getProductVariants(targetProduct.public_id);
-          if (isMounted) {
-            setVariants(fetchedVariants);
-            const activeOnly = fetchedVariants.filter((v) => v.is_active);
-            setSelectedVariant(activeOnly[0] || fetchedVariants[0] || null);
-          }
-        } catch {
-          if (isMounted) {
-            setVariants([]);
-            setSelectedVariant(null);
-          }
-        }
+        // Fetch variants and sort images concurrently
+        const [fetchedVariants] = await Promise.all([
+          getProductVariants(targetProduct.public_id).catch(() => [] as ProductVariant[])
+        ]);
+
+        if (!isMounted) return;
+
+        setVariants(fetchedVariants);
+        const activeOnly = fetchedVariants.filter((v) => v.is_active);
+        setSelectedVariant(activeOnly[0] || fetchedVariants[0] || null);
 
         const imgs = targetProduct.images || [];
         const sortedImages = [...imgs].sort((a, b) => {
@@ -137,7 +132,6 @@ export default function ProductDetailPage() {
 
         setImages(sortedImages);
         setSelectedImageIndex(0);
-
       } catch (err: any) {
         if (isMounted) {
           setError(err.message || "Failed to load product details.");
@@ -151,22 +145,20 @@ export default function ProductDetailPage() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, [slugParam]);
 
-  // Determine Stock Status:
-  // If NO variants exist at the moment -> strictly OUT OF STOCK (Product variant not found)
   const hasNoVariants = useMemo(() => {
     return !loading && product !== null && variants.length === 0;
   }, [loading, product, variants]);
 
   const isAvailableInStock = useMemo(() => {
     if (!product || product.is_active === false) return false;
-    if (hasNoVariants) return false; // Strictly out of stock if no variants exist
+    if (hasNoVariants) return false;
     return Boolean(selectedVariant && selectedVariant.is_active !== false);
   }, [product, hasNoVariants, selectedVariant]);
 
-  // Pricing: Selected Variant price fallback to Product base price
   const currentPrice = useMemo(() => {
     if (selectedVariant?.price != null && Number(selectedVariant.price) > 0) {
       return Number(selectedVariant.price);
@@ -188,18 +180,6 @@ export default function ProductDetailPage() {
 
   const currentImageUrl = images[selectedImageIndex]?.image_url || "/prod1.png";
 
-  // Wishlist check from context
-  const isProductWishlisted = useMemo(() => {
-    if (!product) return false;
-    return isInWishlist(product.public_id) || (product.slug ? isInWishlist(product.slug) : false);
-  }, [product, isInWishlist]);
-
-  const handleWishlistClick = async () => {
-    if (!product) return;
-    const numericId = (product as any).id || 0;
-    await toggleWishlist(numericId, product.public_id);
-  };
-
   const handleNextImage = () => {
     if (images.length <= 1) return;
     setSelectedImageIndex((prev) => (prev + 1) % images.length);
@@ -218,7 +198,6 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Add Item to Cart
   const handleAddToCart = async () => {
     if (!product || !isAvailableInStock || !selectedVariant) return;
 
@@ -240,7 +219,6 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Direct Buy Now / Express Checkout
   const handleBuyNow = async () => {
     if (!product || !isAvailableInStock || !selectedVariant) return;
 
@@ -253,11 +231,13 @@ export default function ProductDetailPage() {
         `${product.name} ${selectedVariant.flavour ? `(${selectedVariant.flavour})` : ""}`,
         currentPrice
       );
-      if (isAuthenticated) {
-        router.push("/checkout");
-      } else {
-        router.push("/shop/auth/login?redirect=/checkout");
-      }
+      startTransition(() => {
+        if (isAuthenticated) {
+          router.push("/checkout");
+        } else {
+          router.push("/shop/auth/login?redirect=/checkout");
+        }
+      });
     } catch (err: any) {
       alert(err.response?.data?.detail || "Could not proceed to checkout.");
       setIsExpressCheckingOut(false);
@@ -387,7 +367,7 @@ export default function ProductDetailPage() {
                 </>
               )}
 
-              {/* Image Preview Canvas - Properly Filled (object-cover) */}
+              {/* LCP Prioritized Primary Image Stage */}
               <div 
                 className="relative w-full h-full cursor-zoom-in" 
                 onClick={() => setIsLightboxOpen(true)}
@@ -398,12 +378,12 @@ export default function ProductDetailPage() {
                   fill
                   priority
                   loading="eager"
+                  quality={75}
                   sizes="(max-width: 1024px) 100vw, 55vw"
-                  className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                  className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
                 />
               </div>
 
-              {/* Indicators */}
               {images.length > 1 && (
                 <div className="absolute bottom-3 sm:bottom-4 z-10 px-3 py-1 rounded-full bg-white/90 border border-neutral-200 text-[10px] font-mono font-bold text-neutral-600 shadow-sm pointer-events-none backdrop-blur-md">
                   {selectedImageIndex + 1} / {images.length}
@@ -431,6 +411,8 @@ export default function ProductDetailPage() {
                         src={img.image_url}
                         alt={img.alt_text || `Angle ${idx + 1}`}
                         fill
+                        loading="lazy"
+                        quality={70}
                         sizes="100px"
                         className="object-cover object-center"
                       />
@@ -443,7 +425,7 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {/* Quality Badges */}
+            {/* Trust Grid */}
             <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-1 sm:pt-2">
               <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-xs">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
@@ -495,7 +477,7 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Pricing & Commercial Box */}
+            {/* Pricing Box */}
             <div className="p-5 sm:p-6 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-sm space-y-5">
               <div className="flex items-baseline justify-between">
                 <div className="space-y-1">
@@ -520,7 +502,7 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                {/* Stock Indicator Badge */}
+                {/* Stock Indicator */}
                 <div className="text-right">
                   {isAvailableInStock ? (
                     <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
@@ -536,7 +518,7 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* No Variant Alert Notice */}
+              {/* No Variant Alert */}
               {hasNoVariants && (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -544,7 +526,7 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              {/* VARIANT SELECTOR (Displayed if product has variants) */}
+              {/* Variant Selector */}
               {variants.length > 0 && (
                 <div className="pt-3 border-t border-neutral-100 space-y-3">
                   <div className="flex items-center justify-between">
@@ -607,7 +589,7 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              {/* Quantity Selector & Wishlist */}
+              {/* Quantity Selector & Action Controls */}
               <div className="pt-3 border-t border-neutral-100 flex items-center space-x-3 sm:space-x-4">
                 <div className="flex items-center space-x-2 bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl p-1 sm:p-1.5">
                   <button
@@ -637,7 +619,7 @@ export default function ProductDetailPage() {
                     productIdentifier={product.public_id}
                     className="w-10 h-10 sm:w-11 sm:h-11 shadow-xs"
                     iconClassName="w-4 h-4"
-                  />    
+                  />
 
                   <button
                     type="button"
@@ -650,7 +632,7 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* SIDE-BY-SIDE Desktop Action Buttons */}
+              {/* Side-by-Side Action Buttons */}
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -712,6 +694,7 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
+            {/* Spec Highlights */}
             <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs">
               <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 space-y-1 shadow-xs">
                 <span className="text-[10px] uppercase font-bold text-neutral-400 block">Formulation Type</span>
@@ -820,7 +803,7 @@ export default function ProductDetailPage() {
         </div>
       </section>
 
-      {/* SIDE-BY-SIDE Mobile Bottom Sticky Bar */}
+      {/* Side-by-Side Mobile Bottom Sticky Action Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#2D5A1E]/20 p-3 sm:p-4 shadow-2xl flex items-center justify-between gap-3">
         <div className="space-y-0.5 shrink-0">
           <span className="text-[10px] uppercase font-bold text-neutral-400 block">Total</span>
@@ -836,7 +819,6 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Side-by-side Action Buttons on Mobile */}
         <div className="grid grid-cols-2 gap-2 flex-1 max-w-xs">
           <button
             type="button"
@@ -876,153 +858,136 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Share Modal */}
-      <AnimatePresence>
-        {isShareModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsShareModalOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            />
+      {/* Share Modal - Zero Runtime Overhead */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            onClick={() => setIsShareModalOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200" 
+          />
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ duration: 0.2 }}
-              className="relative w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-[#2D5A1E]/20 text-[#172B15] z-10 space-y-6"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#8CC63F]/20 text-[#2D5A1E] text-[10px] font-bold uppercase tracking-wider">
-                    <Share2 className="w-3 h-3 text-[#639E1F]" />
-                    <span>Share Formulation</span>
-                  </div>
-                  <h3 className="text-lg font-bold tracking-tight text-[#172B15]">
-                    {product.name}
-                  </h3>
-                  <p className="text-xs text-neutral-500">
-                    Copy the link below or share directly with clients or practitioners.
-                  </p>
+          <div className="relative w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-[#2D5A1E]/20 text-[#172B15] z-10 space-y-6">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-[#8CC63F]/20 text-[#2D5A1E] text-[10px] font-bold uppercase tracking-wider">
+                  <Share2 className="w-3 h-3 text-[#639E1F]" />
+                  <span>Share Formulation</span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsShareModalOpen(false)}
-                  className="p-1.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-500 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <h3 className="text-lg font-bold tracking-tight text-[#172B15]">
+                  {product.name}
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Copy the link below or share directly with clients or practitioners.
+                </p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-[#FAFAF7] border border-neutral-200 flex items-center justify-between gap-3">
-                <span className="text-xs text-neutral-600 font-mono truncate select-all">
-                  {typeof window !== "undefined" ? window.location.href : `/shop/${product.slug}`}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyLink}
-                  className="px-4 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center space-x-1.5 shrink-0 shadow-sm cursor-pointer"
-                >
-                  {copiedLink ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-[#8CC63F]" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="pt-2 border-t border-neutral-100 flex items-center justify-between">
-                <span className="text-[11px] font-medium text-neutral-400">Direct Share:</span>
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = typeof window !== "undefined" ? window.location.href : "";
-                      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out ${product.name}:${url}`)}`, "_blank");
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center space-x-1 cursor-pointer"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    <span>WhatsApp</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = typeof window !== "undefined" ? window.location.href : "";
-                      window.open(`mailto:?subject=${encodeURIComponent(product.name)}&body=${encodeURIComponent(`Take a look at this formulation:\n${url}`)}`);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-neutral-100 text-neutral-700 text-xs font-bold hover:bg-neutral-200 transition-colors cursor-pointer"
-                  >
-                    Email
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Lightbox Modal */}
-      <AnimatePresence>
-        {isLightboxOpen && (
-          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center"
-            >
               <button
                 type="button"
-                onClick={() => setIsLightboxOpen(false)}
-                className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
-                title="Close"
+                onClick={() => setIsShareModalOpen(false)}
+                className="p-1.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-500 transition-colors cursor-pointer"
               >
-                <X className="w-6 h-6" />
+                <X className="w-4 h-4" />
               </button>
+            </div>
 
-              {images.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handlePrevImage}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
-                  >
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleNextImage}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
-                  >
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                </>
-              )}
+            <div className="p-3 rounded-2xl bg-[#FAFAF7] border border-neutral-200 flex items-center justify-between gap-3">
+              <span className="text-xs text-neutral-600 font-mono truncate select-all">
+                {typeof window !== "undefined" ? window.location.href : `/shop/${product.slug}`}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="px-4 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center space-x-1.5 shrink-0 shadow-sm cursor-pointer"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#8CC63F]" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
 
-              <div className="relative w-full h-full p-4">
-                <Image
-                  src={currentImageUrl}
-                  alt={product.name}
-                  fill
-                  className="object-contain"
-                />
+            <div className="pt-2 border-t border-neutral-100 flex items-center justify-between">
+              <span className="text-[11px] font-medium text-neutral-400">Direct Share:</span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = typeof window !== "undefined" ? window.location.href : "";
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out ${product.name}:${url}`)}`, "_blank");
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center space-x-1 cursor-pointer"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = typeof window !== "undefined" ? window.location.href : "";
+                    window.open(`mailto:?subject=${encodeURIComponent(product.name)}&body=${encodeURIComponent(`Take a look at this formulation:\n${url}`)}`);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-100 text-neutral-700 text-xs font-bold hover:bg-neutral-200 transition-colors cursor-pointer"
+                >
+                  Email
+                </button>
               </div>
-            </motion.div>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* Lightbox Modal - Native Hardware Acceleration */}
+      {isLightboxOpen && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative w-full max-w-4xl h-[80vh] flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setIsLightboxOpen(false)}
+              className="absolute top-4 right-4 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
+              title="Close"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrevImage}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-white/10 text-white hover:bg-white hover:text-black transition-all cursor-pointer"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
+
+            <div className="relative w-full h-full p-4">
+              <Image
+                src={currentImageUrl}
+                alt={product.name}
+                fill
+                quality={85}
+                className="object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <LuxuryFooter />
     </div>

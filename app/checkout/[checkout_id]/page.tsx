@@ -1,7 +1,7 @@
 // app/checkout/[checkout_id]/page.tsx
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, use, useTransition, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -60,22 +60,29 @@ export default function CheckoutPage({
   const [addresses, setAddresses] = useState<CustomerAddressResponse[]>([]);
   const [selectedAddressPublicId, setSelectedAddressPublicId] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [updatingAddress, setUpdatingAddress] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [updatingAddress, setUpdatingAddress] = useState<boolean>(false);
+  const [confirming, setConfirming] = useState<boolean>(false);
   const [paymentPhase, setPaymentPhase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Expiry countdown timer string
+  // Expiry countdown timer state
   const [timeLeft, setTimeLeft] = useState<string>("--:--");
-  const [isExpired, setIsExpired] = useState(false);
+  const [isExpired, setIsExpired] = useState<boolean>(false);
 
-  // 1. Initial Load: Fetch Checkout & Saved Addresses
+  const [, startTransition] = useTransition();
+
+  // 1. Initial Load: Concurrently fetch Checkout, Addresses, and preload Cashfree SDK
   useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
     async function loadData() {
       if (authLoading) return;
       if (!isAuthenticated) {
-        router.push(`/shop/auth/login?redirect=/checkout/${checkoutId}`);
+        startTransition(() => {
+          router.push(`/shop/auth/login?redirect=/checkout/${checkoutId}`);
+        });
         return;
       }
 
@@ -84,7 +91,10 @@ export default function CheckoutPage({
         const [checkoutData, addressesData] = await Promise.all([
           getCheckout(checkoutId),
           getCustomerAddresses(),
+          loadCashfreeSDK().catch(() => null), // Pre-warm Cashfree gateway in background
         ]);
+
+        if (!isMounted) return;
 
         setCheckout(checkoutData);
         setAddresses(addressesData);
@@ -92,29 +102,42 @@ export default function CheckoutPage({
         // Pre-select default address if not yet selected on the checkout
         if (!checkoutData.selected_address_id && addressesData.length > 0) {
           const defaultAddr = addressesData.find((a) => a.is_default) || addressesData[0];
-          await handleAddressChange(defaultAddr.public_id);
+          setSelectedAddressPublicId(defaultAddr.public_id);
+          selectCheckoutAddress(checkoutId, defaultAddr.public_id)
+            .then((updated) => {
+              if (isMounted) setCheckout(updated);
+            })
+            .catch(() => null);
         } else if (checkoutData.selected_address_id) {
           const active = addressesData.find((a) => a.is_default);
           if (active) setSelectedAddressPublicId(active.public_id);
         }
       } catch (err: any) {
+        if (!isMounted) return;
         const detail = err.response?.data?.detail;
         setError(typeof detail === "string" ? detail : "Failed to load checkout details.");
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     loadData();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [checkoutId, isAuthenticated, authLoading, router]);
 
-  // 2. Countdown Timer (Fixed TypeScript TS2769: narrows expires_at to defined string)
+  // 2. High-Performance Countdown Timer (Guards against TS2769 with strict narrowing)
   useEffect(() => {
     const expiresAt = checkout?.expires_at;
     if (!expiresAt) return;
 
+    const targetTimestamp = new Date(expiresAt).getTime();
+
     const interval = setInterval(() => {
-      const remainingMs = new Date(expiresAt).getTime() - Date.now();
+      const remainingMs = targetTimestamp - Date.now();
 
       if (remainingMs <= 0) {
         setTimeLeft("00:00");
@@ -132,24 +155,26 @@ export default function CheckoutPage({
     return () => clearInterval(interval);
   }, [checkout?.expires_at]);
 
-  // 3. Handle Selecting an Address
-  const handleAddressChange = async (addressPublicId: string) => {
+  // 3. Optimistic Address Selection
+  const handleAddressChange = useCallback(async (addressPublicId: string) => {
     setSelectedAddressPublicId(addressPublicId);
     setUpdatingAddress(true);
     setError(null);
 
     try {
       const updated = await selectCheckoutAddress(checkoutId, addressPublicId);
-      setCheckout(updated);
+      startTransition(() => {
+        setCheckout(updated);
+      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(typeof detail === "string" ? detail : "Failed to select shipping destination.");
     } finally {
       setUpdatingAddress(false);
     }
-  };
+  }, [checkoutId]);
 
-  // 4. Confirm Checkout -> Create Order -> Cashfree SDK (v3) -> Verify Payment
+  // 4. Confirm Checkout -> Order -> Cashfree SDK -> Verify Payment
   const handleConfirmAndPay = async () => {
     if (!selectedAddressPublicId) {
       setError("Please select a delivery address before confirming.");
@@ -158,38 +183,29 @@ export default function CheckoutPage({
 
     setConfirming(true);
     setError(null);
-
     let createdOrderPublicId: string | null = null;
 
     try {
-      // Step A: Lock Pricing
       setPaymentPhase("Locking pricing & inventory...");
       await confirmCheckout(checkoutId);
 
-      // Step B: Create Order from Locked Checkout
       setPaymentPhase("Generating order reservation...");
       const order = await createOrderFromCheckout(checkoutId);
       createdOrderPublicId = order.public_id;
 
-      // Step C: Refresh Cart in Background
-      await refreshCart();
+      // Sync cart in background non-blockingly
+      refreshCart().catch(() => null);
 
-      // Step D: Initialize Payment Session via FastAPI Backend
       setPaymentPhase("Securing encrypted payment session...");
       const payment = await createPaymentFromOrder(order.public_id);
 
-      // Guard: Ensure payment session ID was generated by the provider
       if (!payment?.payment_session_id) {
-        throw new Error(
-          "Payment session token was not generated by Cashfree. Please retry."
-        );
+        throw new Error("Payment session token was not generated by Cashfree. Please retry.");
       }
 
-      // Step E: Load Initialized Cashfree SDK Instance
       setPaymentPhase("Launching Cashfree gateway...");
       const cashfree = await loadCashfreeSDK();
 
-      // Step F: Mount Cashfree Drop-in / Modal Checkout
       cashfree.checkout({
         paymentSessionId: payment.payment_session_id,
         redirectTarget: "_modal",
@@ -201,21 +217,23 @@ export default function CheckoutPage({
           return;
         }
 
-        // Step G: Verify Payment on Backend
         setPaymentPhase("Verifying transaction...");
         try {
           const verified = await verifyPayment(payment.public_id, {
             provider_payment_id: result.paymentDetails?.paymentMessage || undefined,
           });
 
-          if (verified.status === "succeeded") {
-            router.push(`/shop/account/orders/${order.public_id}?payment_success=true`);
-          } else {
-            router.push(`/shop/account/orders/${order.public_id}`);
-          }
+          startTransition(() => {
+            if (verified.status === "succeeded") {
+              router.push(`/shop/account/orders/${order.public_id}?payment_success=true`);
+            } else {
+              router.push(`/shop/account/orders/${order.public_id}`);
+            }
+          });
         } catch {
-          // If verify API throws, fallback to order details page for polling/retry
-          router.push(`/shop/account/orders/${order.public_id}`);
+          startTransition(() => {
+            router.push(`/shop/account/orders/${order.public_id}`);
+          });
         }
       });
     } catch (err: any) {
@@ -228,11 +246,12 @@ export default function CheckoutPage({
       setConfirming(false);
       setPaymentPhase(null);
 
-      // If the order was created but payment launch failed, route to the created order
       if (createdOrderPublicId) {
         setTimeout(() => {
-          router.push(`/shop/account/orders/${createdOrderPublicId}`);
-        }, 1500);
+          startTransition(() => {
+            router.push(`/shop/account/orders/${createdOrderPublicId}`);
+          });
+        }, 1200);
       }
     }
   };
@@ -250,7 +269,7 @@ export default function CheckoutPage({
 
   if (isExpired || checkout?.status === "expired") {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6 text-center animate-in fade-in duration-200">
         <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-[#2D5A1E]/15 shadow-xl space-y-4">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
             <Clock className="w-6 h-6" />
@@ -260,8 +279,13 @@ export default function CheckoutPage({
             The 30-minute reservation on these live probiotic formulations has expired. Please initiate a fresh checkout to reserve live inventory.
           </p>
           <button
-            onClick={() => router.push("/checkout")}
-            className="w-full py-3.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all cursor-pointer"
+            type="button"
+            onClick={() => {
+              startTransition(() => {
+                router.push("/checkout");
+              });
+            }}
+            className="w-full py-3.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all cursor-pointer shadow-xs"
           >
             Create New Checkout
           </button>
@@ -285,7 +309,7 @@ export default function CheckoutPage({
             </h1>
           </div>
 
-          <div className="inline-flex items-center space-x-2.5 px-4 py-2 rounded-2xl bg-white border border-[#2D5A1E]/20 shadow-sm text-xs font-mono">
+          <div className="inline-flex items-center space-x-2.5 px-4 py-2 rounded-2xl bg-white border border-[#2D5A1E]/20 shadow-xs text-xs font-mono">
             <Clock className="w-4 h-4 text-[#639E1F] animate-pulse" />
             <span className="text-neutral-500">Reserved for:</span>
             <span className="font-bold text-[#172B15]">{timeLeft}</span>
@@ -293,7 +317,7 @@ export default function CheckoutPage({
         </div>
 
         {error && (
-          <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
+          <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2 animate-in fade-in duration-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -304,7 +328,7 @@ export default function CheckoutPage({
           
           {/* LEFT COLUMN: Shipping Address Selector */}
           <div className="lg:col-span-7 space-y-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-sm space-y-6">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-xs space-y-6">
               <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
                 <div>
                   <h2 className="text-lg font-serif font-bold text-[#172B15]">
@@ -316,6 +340,7 @@ export default function CheckoutPage({
                 </div>
                 <Link
                   href="/account/addresses"
+                  prefetch={false}
                   className="inline-flex items-center space-x-1 text-xs font-bold text-[#639E1F] hover:underline"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -329,7 +354,8 @@ export default function CheckoutPage({
                   <p className="text-xs text-neutral-500">No delivery addresses found in your account.</p>
                   <Link
                     href="/account/addresses"
-                    className="inline-block px-5 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider"
+                    prefetch={false}
+                    className="inline-block px-5 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all"
                   >
                     Add Address Now
                   </Link>
@@ -379,7 +405,7 @@ export default function CheckoutPage({
             </div>
 
             {/* Cold Chain Assurance Notice */}
-            <div className="p-5 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-sm flex items-center space-x-4">
+            <div className="p-5 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-xs flex items-center space-x-4">
               <div className="w-10 h-10 rounded-2xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-5 h-5 text-[#639E1F]" />
               </div>
@@ -392,7 +418,7 @@ export default function CheckoutPage({
 
           {/* RIGHT COLUMN: Order Summary & Confirm Action */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-sm space-y-6">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-xs space-y-6">
               <div className="border-b border-neutral-100 pb-4">
                 <h2 className="text-lg font-serif font-bold text-[#172B15]">
                   2. Order Summary
@@ -447,7 +473,7 @@ export default function CheckoutPage({
                 type="button"
                 onClick={handleConfirmAndPay}
                 disabled={confirming || updatingAddress || !selectedAddressPublicId}
-                className="w-full py-4 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-lg shadow-[#2D5A1E]/20 flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
+                className="w-full py-4 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-md shadow-[#2D5A1E]/15 flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
               >
                 {confirming ? (
                   <>

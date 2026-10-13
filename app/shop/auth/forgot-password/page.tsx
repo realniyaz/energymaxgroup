@@ -1,7 +1,6 @@
-// app/shop/auth/forgot-password/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -45,6 +44,8 @@ export default function CustomerForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const [, startTransition] = useTransition();
+
   // STEP 1: Request Recovery OTP
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +62,9 @@ export default function CustomerForgotPasswordPage() {
         }
       );
       setSuccessMsg(res.data.message);
-      setStep("verify");
+      startTransition(() => {
+        setStep("verify");
+      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(
@@ -100,7 +103,9 @@ export default function CustomerForgotPasswordPage() {
 
       setResetToken(res.data.reset_token);
       setSuccessMsg("Passcode verified. Please define your new credentials.");
-      setStep("reset");
+      startTransition(() => {
+        setStep("reset");
+      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(
@@ -164,8 +169,10 @@ export default function CustomerForgotPasswordPage() {
 
       setSuccessMsg(res.data.message || "Password reset successfully.");
       setTimeout(() => {
-        router.push("/shop/auth/login");
-      }, 2000);
+        startTransition(() => {
+          router.push("/shop/auth/login");
+        });
+      }, 1500);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(
@@ -188,7 +195,7 @@ export default function CustomerForgotPasswordPage() {
         {/* Brand Header */}
         <div className="relative z-10 flex items-center justify-between">
           <Link href="/shop" prefetch={false} className="flex items-center space-x-3 group">
-            <div className="w-11 h-11 bg-white/10 rounded-2xl p-2 border border-white/15 flex items-center justify-center shadow-sm group-hover:border-[#8CC63F]/50 transition-colors">
+            <div className="w-11 h-11 bg-white/10 rounded-2xl p-2 border border-white/15 flex items-center justify-center shadow-xs group-hover:border-[#8CC63F]/50 transition-colors">
               <Image
                 src="/logo1.png"
                 alt="EnergyMax Logo"
@@ -258,7 +265,7 @@ export default function CustomerForgotPasswordPage() {
               </div>
               <span className="text-xs font-bold text-[#172B15] tracking-widest uppercase">EnergyMax</span>
             </div>
-            <Link href="/shop/auth/login" className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:text-[#2D5A1E]">
+            <Link href="/shop/auth/login" prefetch={false} className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:text-[#2D5A1E]">
               Sign In
             </Link>
           </div>
@@ -319,7 +326,7 @@ export default function CustomerForgotPasswordPage() {
                     }}
                     className={`py-2 rounded-xl transition-all cursor-pointer ${
                       method === m
-                        ? "bg-white text-[#172B15] shadow-sm"
+                        ? "bg-white text-[#172B15] shadow-xs"
                         : "text-neutral-400 hover:text-[#172B15]"
                     }`}
                   >
@@ -336,18 +343,19 @@ export default function CustomerForgotPasswordPage() {
                 </label>
                 <div className="relative">
                   {method === "email" && (
-                    <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   )}
                   {method === "username" && (
-                    <User className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <User className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   )}
                   {method === "phone" && (
-                    <Phone className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                    <Phone className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   )}
 
                   <input
                     type={method === "email" ? "email" : "text"}
                     required
+                    autoComplete={method === "email" ? "email" : method === "username" ? "username" : "tel"}
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     placeholder={
@@ -357,7 +365,7 @@ export default function CustomerForgotPasswordPage() {
                         ? "e.g. janesmith"
                         : "+91 98765 43210"
                     }
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] transition-colors"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                 </div>
               </div>
@@ -365,7 +373,7 @@ export default function CustomerForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading || !identifier.trim()}
-                className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm cursor-pointer"
+                className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -399,11 +407,12 @@ export default function CustomerForgotPasswordPage() {
                   </button>
                 </div>
                 <div className="relative">
-                  <KeyRound className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                  <KeyRound className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   <input
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
+                    autoComplete="one-time-code"
                     maxLength={6}
                     required
                     value={otpCode}
@@ -411,7 +420,7 @@ export default function CustomerForgotPasswordPage() {
                       setOtpCode(e.target.value.replace(/\D/g, ""))
                     }
                     placeholder="123456"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-sm font-mono tracking-widest text-[#172B15] focus:outline-none focus:border-[#639E1F] transition-colors"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-sm font-mono tracking-widest text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                 </div>
               </div>
@@ -419,7 +428,7 @@ export default function CustomerForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading || otpCode.length < 6}
-                className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm cursor-pointer"
+                className="w-full py-3.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#2D5A1E] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -452,19 +461,21 @@ export default function CustomerForgotPasswordPage() {
                   New Password *
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   <input
                     type={showNewPass ? "text" : "password"}
                     required
+                    autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Min. 8 characters"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 pr-10 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] transition-colors"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 pr-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNewPass(!showNewPass)}
-                    className="absolute right-3.5 top-3.5 text-neutral-400 hover:text-neutral-600 cursor-pointer"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 focus:outline-none cursor-pointer"
+                    aria-label={showNewPass ? "Hide password" : "Show password"}
                   >
                     {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -476,19 +487,21 @@ export default function CustomerForgotPasswordPage() {
                   Confirm Password *
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                  <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400 pointer-events-none" />
                   <input
                     type={showConfirmPass ? "text" : "password"}
                     required
+                    autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repeat password"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 pr-10 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] transition-colors"
+                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 pr-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPass(!showConfirmPass)}
-                    className="absolute right-3.5 top-3.5 text-neutral-400 hover:text-neutral-600 cursor-pointer"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 focus:outline-none cursor-pointer"
+                    aria-label={showConfirmPass ? "Hide password" : "Show password"}
                   >
                     {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -498,7 +511,7 @@ export default function CustomerForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-2xl bg-[#639E1F] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#528419] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm cursor-pointer"
+                className="w-full py-3.5 rounded-2xl bg-[#639E1F] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#528419] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -517,6 +530,7 @@ export default function CustomerForgotPasswordPage() {
             <span className="text-neutral-500">Remember your credentials?</span>
             <Link
               href="/shop/auth/login"
+              prefetch={false}
               className="font-bold text-[#2D5A1E] hover:text-[#639E1F] transition-colors flex items-center space-x-1"
             >
               <span>Sign In</span>

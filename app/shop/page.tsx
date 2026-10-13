@@ -1,9 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { motion } from "framer-motion";
+import React, { 
+  useState, 
+  useEffect, 
+  useMemo, 
+  useTransition, 
+  useDeferredValue,
+  useCallback 
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { 
   Loader2, 
   ArrowRight, 
@@ -14,10 +21,21 @@ import {
   X, 
   Activity 
 } from "lucide-react";
-import LuxuryNavbar from "@/app/components/Navbar";
-import LuxuryFooter from "@/app/components/LuxuryFooter";
 import { getProducts, Product } from "@/lib/services/productService";
-import WishlistHeartButton from "@/app/components/shop/WishlistHeartButton";
+
+// Lazy-load non-critical structural components to minimize initial bundle size
+const LuxuryNavbar = dynamic(() => import("@/app/components/Navbar"), {
+  ssr: true,
+});
+
+const LuxuryFooter = dynamic(() => import("@/app/components/LuxuryFooter"), {
+  ssr: false,
+});
+
+const WishlistHeartButton = dynamic(
+  () => import("@/app/components/shop/WishlistHeartButton"),
+  { ssr: false }
+);
 
 export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -25,17 +43,22 @@ export default function ShopPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const deferredSearch = useDeferredValue(searchQuery);
+
   const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "newest">("featured");
   const [visibleCount, setVisibleCount] = useState<number>(9);
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     async function loadCatalog() {
       try {
         setLoading(true);
         setError(null);
 
+        // Fetch primary catalog list
         const productRes = await getProducts(1, 100, undefined, true);
 
         if (!isMounted) return;
@@ -60,21 +83,24 @@ export default function ShopPage() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, []);
 
+  // Filter & sort computations with deferred search input
   const filteredProducts = useMemo(() => {
+    const q = deferredSearch.toLowerCase().trim();
+
     return products
       .filter((item) => {
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase().trim();
-          const matchesName = item.name.toLowerCase().includes(q);
-          const matchesBrand = item.brand_name?.toLowerCase().includes(q);
-          const matchesDesc = item.short_description?.toLowerCase().includes(q) || item.description?.toLowerCase().includes(q);
-          const matchesSlug = item.slug?.toLowerCase().includes(q);
-          if (!matchesName && !matchesBrand && !matchesDesc && !matchesSlug) return false;
-        }
-        return true;
+        if (!q) return true;
+        return (
+          item.name.toLowerCase().includes(q) ||
+          item.brand_name?.toLowerCase().includes(q) ||
+          item.short_description?.toLowerCase().includes(q) ||
+          item.description?.toLowerCase().includes(q) ||
+          item.slug?.toLowerCase().includes(q)
+        );
       })
       .sort((a, b) => {
         if (sortBy === "price-asc") {
@@ -90,50 +116,44 @@ export default function ShopPage() {
         if (!a.is_featured && b.is_featured) return 1;
         return (a.display_order ?? 0) - (b.display_order ?? 0);
       });
-  }, [products, searchQuery, sortBy]);
+  }, [products, deferredSearch, sortBy]);
 
-  const handleLoadMore = () => {
-    setVisibleCount((prev) => prev + 6);
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value as "featured" | "price-asc" | "price-desc" | "newest";
+    startTransition(() => {
+      setSortBy(val);
+    });
   };
+
+  const handleLoadMore = useCallback(() => {
+    startTransition(() => {
+      setVisibleCount((prev) => prev + 6);
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FBFBFA] text-[#172B15] font-sans selection:bg-[#8CC63F]/30">
       <LuxuryNavbar />
 
-      {/* Header Banner */}
+      {/* Header Banner - CSS Native Animations */}
       <section className="relative py-12 sm:py-20 bg-[#172B15] text-white overflow-hidden border-b border-[#2D5A1E]/30">
-        <div className="absolute inset-0 z-0 opacity-10 bg-[radial-gradient(#8CC63F_1px,transparent_1px)] [background-size:24px_24px]" />
+        <div className="absolute inset-0 z-0 opacity-10 bg-[radial-gradient(#8CC63F_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
         
         <div className="relative z-10 max-w-4xl mx-auto px-5 sm:px-8 text-center space-y-3 sm:space-y-4">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30 backdrop-blur-md"
-          >
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30 backdrop-blur-md">
             <Activity className="w-3.5 h-3.5 text-[#8CC63F]" />
             <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#8CC63F]">
               Clinical Probiotic Science
             </span>
-          </motion.div>
+          </div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-2xl sm:text-4xl lg:text-5xl font-light tracking-tight text-white leading-tight"
-          >
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-light tracking-tight text-white leading-tight">
             Nutraceutical <span className="font-serif italic text-[#8CC63F]">Formulations</span>
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-xs sm:text-sm text-neutral-300 font-normal max-w-xl mx-auto leading-relaxed"
-          >
+          <p className="text-xs sm:text-sm text-neutral-300 font-normal max-w-xl mx-auto leading-relaxed">
             Targeted live microbial cultures and synbiotic supplements engineered to restore microflora equilibrium, cellular defense, and systemic health.
-          </motion.p>
+          </p>
         </div>
       </section>
 
@@ -143,19 +163,20 @@ export default function ShopPage() {
         {/* Search & Sorting Toolbar */}
         <div className="bg-white rounded-2xl border border-[#2D5A1E]/15 p-3.5 sm:p-5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search formulations or ingredients..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] placeholder-neutral-400 focus:outline-none focus:border-[#639E1F] transition-all"
+              className="w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] placeholder-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
             />
             {searchQuery && (
               <button 
                 type="button"
                 onClick={() => setSearchQuery("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#172B15] cursor-pointer"
+                aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -171,7 +192,7 @@ export default function ShopPage() {
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sort:</span>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={handleSortChange}
                 className="px-3 py-1.5 sm:py-2 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-semibold text-[#172B15] focus:outline-none focus:border-[#639E1F] cursor-pointer"
               >
                 <option value="featured">Featured First</option>
@@ -242,18 +263,14 @@ export default function ShopPage() {
                       ? Math.round(((numericMrp - numericPrice) / numericMrp) * 100)
                       : 0;
 
-                    const numericDbId = (product as any).id || 0;
+                    const isAboveFold = idx < 3;
 
                     return (
-                      <motion.div
+                      <div
                         key={product.public_id || idx}
-                        initial={{ opacity: 0, y: 15 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: "-30px" }}
-                        transition={{ duration: 0.4, delay: (idx % 3) * 0.05 }}
                         className="bg-white rounded-3xl border border-[#2D5A1E]/15 overflow-hidden shadow-xs hover:shadow-xl hover:border-[#8CC63F]/50 transition-all duration-300 flex flex-col justify-between group"
                       >
-                        {/* Properly Filled Image Container */}
+                        {/* Image Container with precise size-constraints & lazy loading */}
                         <div className="relative">
                           <Link 
                             href={`/shop/${product.slug || product.public_id}`}
@@ -264,8 +281,10 @@ export default function ShopPage() {
                               alt={product.name}
                               fill
                               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                              className="object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
-                              priority={idx < 3}
+                              quality={75}
+                              priority={isAboveFold}
+                              loading={isAboveFold ? "eager" : "lazy"}
+                              className="object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
                             />
 
                             {/* Badges */}
@@ -284,7 +303,7 @@ export default function ShopPage() {
                             </div>
                           </Link>
 
-                          {/* Cyclic Functional Wishlist Button */}
+                          {/* Dynamic Non-blocking Wishlist */}
                           <WishlistHeartButton
                             productId={Number(product.id) || Number((product as any).pk) || 0}
                             productIdentifier={product.public_id}
@@ -309,7 +328,7 @@ export default function ShopPage() {
                             </p>
                           </div>
 
-                          {/* Price & Single View Button */}
+                          {/* Price & View Button */}
                           <div className="pt-3 border-t border-neutral-100 flex items-center justify-between gap-3">
                             <div className="space-y-0.5">
                               <span className="text-[9px] uppercase font-bold tracking-wider text-neutral-400 block">
@@ -327,7 +346,6 @@ export default function ShopPage() {
                               </div>
                             </div>
 
-                            {/* View Button Only */}
                             <Link
                               href={`/shop/${product.slug || product.public_id}`}
                               className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#2D5A1E] transition-all flex items-center space-x-1.5 shadow-xs shrink-0 group/btn"
@@ -337,7 +355,7 @@ export default function ShopPage() {
                             </Link>
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                     );
                   })}
                 </div>

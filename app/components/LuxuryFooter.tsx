@@ -99,7 +99,7 @@ export default function LuxuryFooter() {
             
             <div className="space-y-2 text-xs text-neutral-300 font-normal leading-relaxed">
               <p className="font-semibold text-white">EnergyMax Group Global Pvt. Ltd.</p>
-              <p>Regd. Office: B 28 Manaar Tower, Noida - 132, Uttar Pradesh - 201304</p>
+              <p>Regd. Office: B 28, Noida - 132, Uttar Pradesh - 201304</p>
               <p className="pt-2">For Queries, Direct Selling Inquiries, and Grievances, please contact our Compliance Officer.</p>
               <p className="pt-1">
                 <span className="text-white font-medium">Email ID:</span> <a href="mailto:care@energymaxgroup.com" className="text-[#8CC63F] underline">care@energymaxgroup.com</a><br />
@@ -117,9 +117,9 @@ export default function LuxuryFooter() {
           <p>© 2026 EnergyMax Group International Pvt. Ltd. All Rights Reserved. Compliant with Direct Selling Guidelines & D2C Standards.</p>
           
           <div className="flex items-center space-x-6">
-            <a href="#sitemap" className="hover:text-[#8CC63F] transition-colors">Site Map</a>
+            <a href="/sitemap" className="hover:text-[#8CC63F] transition-colors">Site Map</a>
             <span>&bull;</span>
-            <a href="#compliance-legal" className="hover:text-[#8CC63F] transition-colors">Legal Disclaimers</a>
+            <a href="/disclaimer" className="hover:text-[#8CC63F] transition-colors">Legal Disclaimers</a>
           </div>
         </div>
 
