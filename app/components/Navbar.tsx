@@ -22,6 +22,7 @@ import {
   Loader2,
   ArrowBigRight,
   ArrowRight,
+  Heart,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -306,6 +307,14 @@ export default function LuxuryNavbar() {
                           >
                             <Package className="w-3.5 h-3.5 text-[#639E1F]" />
                             <span>My Orders</span>
+                          </Link>
+                          <Link
+                            href="/shop/account/wishlist"
+                            onClick={() => setIsUserMenuOpen(false)}
+                            className="flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors"
+                          >
+                            <Heart className="w-3.5 h-3.5 text-[#639E1F]" />
+                            <span>My Wishlist</span>
                           </Link>
                         </div>
 

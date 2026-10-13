@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import LuxuryNavbar from "@/app/components/Navbar";
 import LuxuryFooter from "@/app/components/LuxuryFooter";
+import WishlistHeartButton from "@/app/components/shop/WishlistHeartButton";
 import { 
   getProductByPublicId, 
   getProducts, 
@@ -45,6 +46,7 @@ import {
 } from "@/lib/services/productService";
 import { useCart } from "@/context/cart-context";
 import { useCustomerAuth } from "@/context/customer-auth-context";
+import { useWishlist } from "@/context/wishlist-context";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -53,6 +55,7 @@ export default function ProductDetailPage() {
 
   const { addItem, loading: cartLoading } = useCart();
   const { isAuthenticated } = useCustomerAuth();
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -66,13 +69,12 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<"overview" | "science" | "usage" | "compliance">("overview");
-  const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [isAdding, setIsAdding] = useState<boolean>(false);
   const [isExpressCheckingOut, setIsExpressCheckingOut] = useState<boolean>(false);
   const [actionSuccess, setActionSuccess] = useState<boolean>(false);
 
-  // 1. Data Ingestion: Resolve Product & Product Variants
+  // 1. Ingestion: Resolve Product & Product Variants
   useEffect(() => {
     let isMounted = true;
 
@@ -152,15 +154,17 @@ export default function ProductDetailPage() {
     };
   }, [slugParam]);
 
-  // Determine Stock Status
-  // If product has variants, check selected variant; if standalone product, check product.is_active
+  // Determine Stock Status:
+  // If NO variants exist at the moment -> strictly OUT OF STOCK (Product variant not found)
+  const hasNoVariants = useMemo(() => {
+    return !loading && product !== null && variants.length === 0;
+  }, [loading, product, variants]);
+
   const isAvailableInStock = useMemo(() => {
-    if (!product || !product.is_active) return false;
-    if (variants.length > 0) {
-      return selectedVariant ? selectedVariant.is_active : false;
-    }
-    return true; // Self-variant product that is active
-  }, [product, variants, selectedVariant]);
+    if (!product || product.is_active === false) return false;
+    if (hasNoVariants) return false; // Strictly out of stock if no variants exist
+    return Boolean(selectedVariant && selectedVariant.is_active !== false);
+  }, [product, hasNoVariants, selectedVariant]);
 
   // Pricing: Selected Variant price fallback to Product base price
   const currentPrice = useMemo(() => {
@@ -184,6 +188,18 @@ export default function ProductDetailPage() {
 
   const currentImageUrl = images[selectedImageIndex]?.image_url || "/prod1.png";
 
+  // Wishlist check from context
+  const isProductWishlisted = useMemo(() => {
+    if (!product) return false;
+    return isInWishlist(product.public_id) || (product.slug ? isInWishlist(product.slug) : false);
+  }, [product, isInWishlist]);
+
+  const handleWishlistClick = async () => {
+    if (!product) return;
+    const numericId = (product as any).id || 0;
+    await toggleWishlist(numericId, product.public_id);
+  };
+
   const handleNextImage = () => {
     if (images.length <= 1) return;
     setSelectedImageIndex((prev) => (prev + 1) % images.length);
@@ -202,20 +218,17 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Add Item to Cart (Handles both Multi-Variant & Standalone Self-Variant items)
+  // Add Item to Cart
   const handleAddToCart = async () => {
-    if (!product || !isAvailableInStock) return;
-
-    // Use variant public_id if defined; otherwise fallback to product's own public_id
-    const targetVariantId = selectedVariant?.public_id || product.public_id;
+    if (!product || !isAvailableInStock || !selectedVariant) return;
 
     setIsAdding(true);
     try {
       await addItem(
         product.public_id,
-        targetVariantId,
+        selectedVariant.public_id,
         quantity,
-        `${product.name} ${selectedVariant?.flavour ? `(${selectedVariant.flavour})` : ""}`,
+        `${product.name} ${selectedVariant.flavour ? `(${selectedVariant.flavour})` : ""}`,
         currentPrice
       );
       setActionSuccess(true);
@@ -229,17 +242,15 @@ export default function ProductDetailPage() {
 
   // Direct Buy Now / Express Checkout
   const handleBuyNow = async () => {
-    if (!product || !isAvailableInStock) return;
-
-    const targetVariantId = selectedVariant?.public_id || product.public_id;
+    if (!product || !isAvailableInStock || !selectedVariant) return;
 
     setIsExpressCheckingOut(true);
     try {
       await addItem(
         product.public_id,
-        targetVariantId,
+        selectedVariant.public_id,
         quantity,
-        `${product.name} ${selectedVariant?.flavour ? `(${selectedVariant.flavour})` : ""}`,
+        `${product.name} ${selectedVariant.flavour ? `(${selectedVariant.flavour})` : ""}`,
         currentPrice
       );
       if (isAuthenticated) {
@@ -327,10 +338,10 @@ export default function ProductDetailPage() {
           
           {/* Gallery Column */}
           <div className="lg:col-span-7 space-y-4 sm:space-y-6">
-            <div className="relative aspect-square rounded-3xl bg-white border border-[#2D5A1E]/15 overflow-hidden shadow-sm flex items-center justify-center p-6 sm:p-12 group">
+            <div className="relative aspect-square rounded-3xl bg-[#F4F6F4] border border-[#2D5A1E]/15 overflow-hidden shadow-sm flex items-center justify-center group">
               
               {/* Badges Overlay */}
-              <div className="absolute top-4 left-4 z-10 flex flex-col gap-1.5 sm:gap-2">
+              <div className="absolute top-4 left-4 z-10 flex flex-col gap-1.5 sm:gap-2 pointer-events-none">
                 <span className="px-3 py-1 rounded-full bg-white/95 border border-[#2D5A1E]/15 text-[#2D5A1E] text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center space-x-1.5 backdrop-blur-md">
                   <Activity className="w-3 h-3 text-[#639E1F]" />
                   <span>{product.brand_name || "maXilin Series"}</span>
@@ -348,10 +359,10 @@ export default function ProductDetailPage() {
               <button
                 type="button"
                 onClick={() => setIsLightboxOpen(true)}
-                className="absolute top-4 right-4 z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/90 border border-[#2D5A1E]/15 text-[#172B15] flex items-center justify-center shadow-sm hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer"
+                className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-white/90 border border-[#2D5A1E]/15 text-[#172B15] flex items-center justify-center shadow-sm hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer backdrop-blur-md"
                 title="Expand View"
               >
-                <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Maximize2 className="w-4 h-4" />
               </button>
 
               {/* Gallery Swipes */}
@@ -361,7 +372,7 @@ export default function ProductDetailPage() {
                     type="button"
                     onClick={handlePrevImage}
                     aria-label="Previous angle"
-                    className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 border border-[#2D5A1E]/20 text-[#172B15] flex items-center justify-center shadow-md hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer"
+                    className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 border border-[#2D5A1E]/20 text-[#172B15] flex items-center justify-center shadow-md hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer backdrop-blur-md"
                   >
                     <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
@@ -369,14 +380,14 @@ export default function ProductDetailPage() {
                     type="button"
                     onClick={handleNextImage}
                     aria-label="Next angle"
-                    className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 border border-[#2D5A1E]/20 text-[#172B15] flex items-center justify-center shadow-md hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer"
+                    className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 border border-[#2D5A1E]/20 text-[#172B15] flex items-center justify-center shadow-md hover:bg-[#2D5A1E] hover:text-white transition-all cursor-pointer backdrop-blur-md"
                   >
                     <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </>
               )}
 
-              {/* Image Preview Canvas */}
+              {/* Image Preview Canvas - Properly Filled (object-cover) */}
               <div 
                 className="relative w-full h-full cursor-zoom-in" 
                 onClick={() => setIsLightboxOpen(true)}
@@ -388,13 +399,13 @@ export default function ProductDetailPage() {
                   priority
                   loading="eager"
                   sizes="(max-width: 1024px) 100vw, 55vw"
-                  className="object-contain p-2 sm:p-4 transition-transform duration-700 group-hover:scale-105"
+                  className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
 
               {/* Indicators */}
               {images.length > 1 && (
-                <div className="absolute bottom-3 sm:bottom-4 z-10 px-3 py-1 rounded-full bg-white/90 border border-neutral-200 text-[10px] font-mono font-bold text-neutral-600 shadow-sm pointer-events-none">
+                <div className="absolute bottom-3 sm:bottom-4 z-10 px-3 py-1 rounded-full bg-white/90 border border-neutral-200 text-[10px] font-mono font-bold text-neutral-600 shadow-sm pointer-events-none backdrop-blur-md">
                   {selectedImageIndex + 1} / {images.length}
                 </div>
               )}
@@ -410,7 +421,7 @@ export default function ProductDetailPage() {
                       type="button"
                       key={img.public_id || idx}
                       onClick={() => setSelectedImageIndex(idx)}
-                      className={`relative aspect-square rounded-2xl bg-white border-2 overflow-hidden p-1.5 transition-all shadow-sm cursor-pointer ${
+                      className={`relative aspect-square rounded-2xl bg-white border-2 overflow-hidden transition-all shadow-sm cursor-pointer ${
                         isSelected 
                           ? "border-[#8CC63F] ring-2 ring-[#8CC63F]/30 scale-[1.02]" 
                           : "border-neutral-200 hover:border-[#2D5A1E]/40"
@@ -421,7 +432,7 @@ export default function ProductDetailPage() {
                         alt={img.alt_text || `Angle ${idx + 1}`}
                         fill
                         sizes="100px"
-                        className="object-contain p-1"
+                        className="object-cover object-center"
                       />
                       {img.is_primary && (
                         <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-[#8CC63F] ring-2 ring-white" />
@@ -434,7 +445,7 @@ export default function ProductDetailPage() {
 
             {/* Quality Badges */}
             <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-1 sm:pt-2">
-              <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-sm">
+              <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-xs">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
                   <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
@@ -444,7 +455,7 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-sm">
+              <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-xs">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
                   <Leaf className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
@@ -454,7 +465,7 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-sm">
+              <div className="p-3 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left space-y-1 sm:space-y-0 sm:space-x-3 shadow-xs">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
                   <Truck className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
@@ -467,7 +478,7 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Pricing & Selection Column */}
-          <div className="lg:col-span-5 space-y-6 sm:space-y-8">
+          <div className="lg:col-span-5 space-y-5 sm:space-y-7">
             <div className="space-y-2 sm:space-y-3 border-b border-[#2D5A1E]/15 pb-4 sm:pb-6">
               <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
                 {product.brand_name || "EnergyMax Formulations"}
@@ -525,7 +536,15 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* VARIANT SELECTOR (Displayed if product has sub-variants) */}
+              {/* No Variant Alert Notice */}
+              {hasNoVariants && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Product variant not found. This formulation is currently unavailable for order.</span>
+                </div>
+              )}
+
+              {/* VARIANT SELECTOR (Displayed if product has variants) */}
               {variants.length > 0 && (
                 <div className="pt-3 border-t border-neutral-100 space-y-3">
                   <div className="flex items-center justify-between">
@@ -543,16 +562,17 @@ export default function ProductDetailPage() {
                   <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                     {variants.map((v) => {
                       const isSelected = selectedVariant?.public_id === v.public_id;
+                      const isVariantInStock = v.is_active !== false;
                       return (
                         <button
                           type="button"
                           key={v.public_id}
                           onClick={() => setSelectedVariant(v)}
-                          disabled={!v.is_active}
+                          disabled={!isVariantInStock}
                           className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
                             isSelected
-                              ? "bg-[#F2F8ED] border-[#2D5A1E] shadow-sm ring-1 ring-[#2D5A1E]"
-                              : v.is_active
+                              ? "bg-[#F2F8ED] border-[#2D5A1E] shadow-xs ring-1 ring-[#2D5A1E]"
+                              : isVariantInStock
                               ? "bg-white border-neutral-200 hover:border-[#2D5A1E]/40"
                               : "bg-neutral-50 border-neutral-200 opacity-50 cursor-not-allowed"
                           }`}
@@ -570,7 +590,7 @@ export default function ProductDetailPage() {
                               <span className="font-mono font-bold text-xs text-[#2D5A1E]">
                                 ₹{Number(v.price).toLocaleString("en-IN")}
                               </span>
-                              {!v.is_active && (
+                              {!isVariantInStock && (
                                 <span className="text-[9px] font-bold uppercase text-red-600">
                                   Sold Out
                                 </span>
@@ -594,7 +614,7 @@ export default function ProductDetailPage() {
                     type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                     disabled={isAdding || isExpressCheckingOut || !isAvailableInStock}
-                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-sm cursor-pointer disabled:opacity-40"
+                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-xs cursor-pointer disabled:opacity-40"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -605,30 +625,24 @@ export default function ProductDetailPage() {
                     type="button"
                     onClick={() => setQuantity((q) => q + 1)}
                     disabled={isAdding || isExpressCheckingOut || !isAvailableInStock}
-                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-sm cursor-pointer disabled:opacity-40"
+                    className="w-8 h-8 rounded-xl bg-white text-[#172B15] flex items-center justify-center hover:bg-neutral-100 transition-all shadow-xs cursor-pointer disabled:opacity-40"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsWishlisted(!isWishlisted)}
-                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all shadow-sm cursor-pointer ${
-                      isWishlisted 
-                        ? "bg-red-50 border-red-200 text-red-500" 
-                        : "bg-white border-[#2D5A1E]/15 text-neutral-600 hover:border-[#639E1F]"
-                    }`}
-                    title="Add to wishlist"
-                  >
-                    <Heart className={`w-4 h-4 ${isWishlisted ? "fill-current" : ""}`} />
-                  </button>
+                  <WishlistHeartButton
+                    productId={Number(product.id) || Number((product as any).pk) || 0}
+                    productIdentifier={product.public_id}
+                    className="w-10 h-10 sm:w-11 sm:h-11 shadow-xs"
+                    iconClassName="w-4 h-4"
+                  />    
 
                   <button
                     type="button"
                     onClick={() => setIsShareModalOpen(true)}
-                    className="p-2.5 sm:p-3 rounded-2xl bg-white border border-[#2D5A1E]/15 text-neutral-600 hover:border-[#639E1F] transition-all shadow-sm cursor-pointer"
+                    className="p-2.5 sm:p-3 rounded-2xl bg-white border border-[#2D5A1E]/15 text-neutral-600 hover:border-[#639E1F] transition-all shadow-xs cursor-pointer"
                     title="Share Link"
                   >
                     <Share2 className="w-4 h-4" />
@@ -636,58 +650,56 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* Desktop Action Buttons */}
+              {/* SIDE-BY-SIDE Desktop Action Buttons */}
               <div className="space-y-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  disabled={isAdding || isExpressCheckingOut || cartLoading || !isAvailableInStock}
-                  className="w-full py-3.5 sm:py-4 px-6 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-lg shadow-[#2D5A1E]/15 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAdding ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Adding to Bag...</span>
-                    </>
-                  ) : actionSuccess ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-[#8CC63F]" />
-                      <span>Added to Bag</span>
-                    </>
-                  ) : !isAvailableInStock ? (
-                    <>
-                      <Ban className="w-4 h-4" />
-                      <span>Currently Out of Stock</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingBag className="w-4 h-4" />
-                      <span>Add to Cart • ₹{(currentPrice * quantity).toLocaleString("en-IN")}</span>
-                    </>
-                  )}
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={isAdding || isExpressCheckingOut || cartLoading || !isAvailableInStock}
+                    className="py-3.5 px-4 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-md shadow-[#2D5A1E]/15 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isAdding ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Adding...</span>
+                      </>
+                    ) : actionSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-[#8CC63F]" />
+                        <span>Added!</span>
+                      </>
+                    ) : !isAvailableInStock ? (
+                      <span>{hasNoVariants ? "No Variant" : "Out of Stock"}</span>
+                    ) : (
+                      <>
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>Add to Cart</span>
+                      </>
+                    )}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleBuyNow}
-                  disabled={isAdding || isExpressCheckingOut || cartLoading || !isAvailableInStock}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center justify-center space-x-2 shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isExpressCheckingOut ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Proceeding to Checkout...</span>
-                    </>
-                  ) : !isAvailableInStock ? (
-                    <span>Unavailable</span>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 text-[#8CC63F]" />
-                      <span>Buy Now</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleBuyNow}
+                    disabled={isAdding || isExpressCheckingOut || cartLoading || !isAvailableInStock}
+                    className="py-3.5 px-4 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center justify-center space-x-2 shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isExpressCheckingOut ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Routing...</span>
+                      </>
+                    ) : !isAvailableInStock ? (
+                      <span>Unavailable</span>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 text-[#8CC63F]" />
+                        <span>Buy Now</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
                 <button
                   type="button"
@@ -701,12 +713,12 @@ export default function ProductDetailPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs">
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 space-y-1 shadow-sm">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 space-y-1 shadow-xs">
                 <span className="text-[10px] uppercase font-bold text-neutral-400 block">Formulation Type</span>
                 <span className="font-semibold text-[#172B15]">Active Multi-Strain Probiotic</span>
               </div>
 
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 space-y-1 shadow-sm">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#2D5A1E]/10 space-y-1 shadow-xs">
                 <span className="text-[10px] uppercase font-bold text-neutral-400 block">Potency Count</span>
                 <span className="font-semibold text-[#172B15]">Clinically Verified CFU</span>
               </div>
@@ -808,43 +820,52 @@ export default function ProductDetailPage() {
         </div>
       </section>
 
-      {/* Mobile Bottom Sticky Bar for Direct Checkout */}
+      {/* SIDE-BY-SIDE Mobile Bottom Sticky Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#2D5A1E]/20 p-3 sm:p-4 shadow-2xl flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
+        <div className="space-y-0.5 shrink-0">
           <span className="text-[10px] uppercase font-bold text-neutral-400 block">Total</span>
           <div className="flex items-baseline space-x-1.5">
-            <span className="text-lg font-bold text-[#172B15]">
+            <span className="text-base font-bold text-[#172B15]">
               ₹{(currentPrice * quantity).toLocaleString("en-IN")}
             </span>
             {hasDiscount && (
-              <span className="text-[11px] text-neutral-400 line-through">
+              <span className="text-[10px] text-neutral-400 line-through">
                 ₹{(currentMrp * quantity).toLocaleString("en-IN")}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        {/* Side-by-side Action Buttons on Mobile */}
+        <div className="grid grid-cols-2 gap-2 flex-1 max-w-xs">
           <button
             type="button"
             onClick={handleAddToCart}
             disabled={isAdding || isExpressCheckingOut || cartLoading || !isAvailableInStock}
-            className="px-3.5 py-2.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/30 text-[#2D5A1E] text-xs font-bold uppercase tracking-wider flex items-center justify-center cursor-pointer disabled:opacity-50"
-            title="Add to Cart"
+            className="py-2.5 px-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />}
+            {isAdding ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : !isAvailableInStock ? (
+              <span>Out of Stock</span>
+            ) : (
+              <>
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Add</span>
+              </>
+            )}
           </button>
 
           <button
             type="button"
             onClick={handleBuyNow}
             disabled={isAdding || isExpressCheckingOut || cartLoading || !isAvailableInStock}
-            className="px-5 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-md cursor-pointer disabled:opacity-50"
+            className="py-2.5 px-2 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-1 shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExpressCheckingOut ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : !isAvailableInStock ? (
-              <span>Out of Stock</span>
+              <span>Unavailable</span>
             ) : (
               <>
                 <Zap className="w-3.5 h-3.5 text-[#8CC63F]" />

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 import { customerClient } from "@/lib/customer-client";
+import LuxuryNavbar from "@/app/components/Navbar";
 
 export default function CustomerProfilePage() {
   const router = useRouter();
@@ -94,7 +95,9 @@ export default function CustomerProfilePage() {
     : "Active Session";
 
   return (
+    
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-10 sm:py-14 px-4 sm:px-6 lg:px-12 font-sans">
+     
       <div className="max-w-4xl mx-auto space-y-8">
         
         {/* Navigation Breadcrumb */}

@@ -1,6 +1,12 @@
 // lib/services/orderService.ts
 import { customerClient } from "@/lib/customer-client";
 
+/**
+ * =========================================================
+ * SCHEMAS & TYPES
+ * =========================================================
+ */
+
 export interface OrderItem {
   public_id: string;
   product_id?: number;
@@ -33,31 +39,84 @@ export interface OrderTrackingResponse {
 }
 
 export interface OrderAddress {
-  recipient_name: string;
-  phone: string;
-  address_line1: string;
+  recipient_name?: string;
+  phone?: string;
+  address_line1?: string;
   address_line2?: string | null;
-  city: string;
-  state: string;
-  postal_code: string;
+  landmark?: string | null;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
   label?: string;
+  [key: string]: any;
 }
 
+export type OrderStatus =
+  | "pending"
+  | "pending_payment"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
+/**
+ * Single Order Detail (matches Order entity / checkout conversion)
+ */
 export interface OrderResponse {
   public_id: string;
   order_number: string;
-  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
-  payment_status: "pending" | "paid" | "failed" | "refunded";
+  status: OrderStatus;
+  payment_status?: PaymentStatus;
+  customer_name?: string;
+  customer_email?: string | null;
+  customer_phone?: string | null;
   subtotal: number | string;
   tax_amount: number | string;
   discount_amount: number | string;
-  shipping_fee: number | string;
+  shipping_amount?: number | string;
+  shipping_fee?: number | string;
   total_amount: number | string;
-  currency: string;
+  currency?: string;
   items: OrderItem[];
   shipping_address?: OrderAddress;
+  shipping_address_snapshot?: OrderAddress;
   created_at: string;
   updated_at?: string;
+}
+
+/**
+ * Single Order Item from GET /api/v1/shop/orders/my
+ */
+export interface MyOrderSummaryItem {
+  public_id: string;
+  order_number: string;
+  status: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  shipping_address_snapshot: OrderAddress;
+  items: OrderItem[];
+  subtotal: number | string;
+  discount_amount: number | string;
+  shipping_amount: number | string;
+  tax_amount: number | string;
+  total_amount: number | string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Response schema for GET /api/v1/shop/orders/my
+ */
+export interface MyOrdersResponse {
+  items: MyOrderSummaryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 export interface OrderListResponse {
@@ -65,6 +124,42 @@ export interface OrderListResponse {
   total: number;
   page?: number;
   page_size?: number;
+}
+
+/**
+ * Utility helper to safely parse decimal strings from the backend
+ */
+export function parseOrderAmount(val: number | string | undefined | null): number {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === "number") return val;
+  const parsed = parseFloat(String(val).trim());
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * =========================================================
+ * ORDER API METHODS
+ * =========================================================
+ */
+
+/**
+ * GET /api/v1/shop/orders/my
+ * Fetches authenticated customer's paginated order history.
+ */
+export async function getMyOrders(
+  page: number = 1,
+  pageSize: number = 20
+): Promise<MyOrdersResponse> {
+  const res = await customerClient.get<MyOrdersResponse>(
+    "/api/v1/shop/orders/my",
+    {
+      params: {
+        page,
+        page_size: pageSize,
+      },
+    }
+  );
+  return res.data;
 }
 
 /**
@@ -82,7 +177,7 @@ export async function createOrderFromCheckout(
 
 /**
  * GET /api/v1/shop/orders
- * Returns customer order history.
+ * Returns customer order history (standard/admin listing fallback).
  */
 export async function getCustomerOrders(
   page: number = 1,
@@ -116,6 +211,19 @@ export async function getOrderTracking(
 ): Promise<OrderTrackingResponse> {
   const res = await customerClient.get<OrderTrackingResponse>(
     `/api/v1/shop/orders/${orderPublicId}/tracking`
+  );
+  return res.data;
+}
+
+/**
+ * GET /api/v1/shop/orders/track/{order_number}
+ * Public order tracking lookup by order number.
+ */
+export async function trackOrderByNumber(
+  orderNumber: string
+): Promise<OrderTrackingResponse> {
+  const res = await customerClient.get<OrderTrackingResponse>(
+    `/api/v1/shop/orders/track/${orderNumber}`
   );
   return res.data;
 }

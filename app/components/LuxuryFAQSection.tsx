@@ -136,7 +136,7 @@ export default function LuxuryFAQSection() {
           </div>
 
           <a
-            href="#contact"
+            href="/help-centre"
             className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#2D5A1E] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#234717] transition-all shadow-md shrink-0 text-center"
           >
             Contact Help Centre

@@ -15,6 +15,13 @@ import {
   getCustomerSessionToken,
 } from "@/lib/customer-client";
 import { getGuestCartToken, setGuestCartToken } from "@/lib/guest-client";
+import {
+  requestPasswordResetOTP,
+  resendPasswordResetOTP,
+  confirmPasswordResetOTP,
+  resetCustomerPassword,
+  RecoveryMethod,
+} from "@/lib/services/forgotPasswordService";
 
 export interface CustomerUser {
   id?: number;
@@ -57,6 +64,14 @@ export interface CustomerAuthContextType {
     channel?: "email" | "sms",
     purpose?: "login" | "registration" | "password_reset"
   ) => Promise<CustomerUser>;
+  requestPasswordRecovery: (method: RecoveryMethod, identifier: string) => Promise<string>;
+  resendPasswordRecovery: (method: RecoveryMethod, identifier: string) => Promise<string>;
+  confirmPasswordRecoveryOtp: (
+    method: RecoveryMethod,
+    identifier: string,
+    code: string
+  ) => Promise<{ reset_token: string; expires_at: string }>;
+  resetPassword: (resetToken: string, newPassword: string) => Promise<string>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<CustomerUser | null>;
 }
@@ -73,16 +88,11 @@ export const CustomerAuthProvider = ({
   const [customer, setCustomer] = useState<CustomerUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  /**
-   * Automatically merge anonymous guest cart items into the newly 
-   * authenticated customer cart upon login/OTP verification.
-   */
   const triggerGuestCartMerge = useCallback(async () => {
     try {
       const guestToken = getGuestCartToken();
       if (!guestToken) return;
 
-      // Both X-Customer-Session-Token and X-Guest-Cart-Token headers are handled
       await customerClient.post(
         "/api/v1/shop/customer/cart/merge",
         {},
@@ -93,16 +103,12 @@ export const CustomerAuthProvider = ({
         }
       );
 
-      // Once merged, destroy the temporary guest token
       setGuestCartToken(null);
     } catch (err) {
       console.warn("Guest cart merge skipped or non-critical failure:", err);
     }
   }, []);
 
-  /**
-   * Hydrates customer profile on boot using stored session token.
-   */
   const refreshProfile = useCallback(async (): Promise<CustomerUser | null> => {
     const token = getCustomerSessionToken();
     if (!token) {
@@ -118,7 +124,6 @@ export const CustomerAuthProvider = ({
       setCustomer(res.data);
       return res.data;
     } catch {
-      // Invalidate if token expired or is revoked on the backend
       setCustomerSessionToken(null);
       setCustomer(null);
       return null;
@@ -131,10 +136,6 @@ export const CustomerAuthProvider = ({
     refreshProfile();
   }, [refreshProfile]);
 
-  /**
-   * Standard Password Login
-   * POST /api/v1/shop/customer/auth/login
-   */
   const loginWithPassword = useCallback(
     async (identifier: string, password: string): Promise<CustomerUser> => {
       setLoading(true);
@@ -151,9 +152,7 @@ export const CustomerAuthProvider = ({
         setCustomerSessionToken(session_token);
         setCustomer(user);
 
-        // Merge any existing guest cart
         await triggerGuestCartMerge();
-
         return user;
       } finally {
         setLoading(false);
@@ -162,11 +161,6 @@ export const CustomerAuthProvider = ({
     [triggerGuestCartMerge]
   );
 
-  /**
-   * Customer Registration
-   * POST /api/v1/shop/customer/auth/register
-   * Note: Backend returns the unverified user object without a session token.
-   */
   const registerCustomer = useCallback(
     async (data: CustomerRegisterPayload): Promise<CustomerUser> => {
       setLoading(true);
@@ -182,7 +176,6 @@ export const CustomerAuthProvider = ({
             password: data.password,
           }
         );
-
         return res.data;
       } finally {
         setLoading(false);
@@ -191,10 +184,6 @@ export const CustomerAuthProvider = ({
     []
   );
 
-  /**
-   * Request OTP Code (Email/SMS)
-   * POST /api/v1/shop/customer/auth/otp/request
-   */
   const requestOtp = useCallback(
     async (
       destination: string,
@@ -209,16 +198,11 @@ export const CustomerAuthProvider = ({
         channel,
         purpose,
       });
-
       return res.data;
     },
     []
   );
 
-  /**
-   * Verify OTP Code and establish authenticated customer session
-   * POST /api/v1/shop/customer/auth/otp/verify
-   */
   const verifyOtp = useCallback(
     async (
       destination: string,
@@ -242,9 +226,7 @@ export const CustomerAuthProvider = ({
         setCustomerSessionToken(session_token);
         setCustomer(user);
 
-        // Merge any existing guest cart
         await triggerGuestCartMerge();
-
         return user;
       } finally {
         setLoading(false);
@@ -253,15 +235,47 @@ export const CustomerAuthProvider = ({
     [triggerGuestCartMerge]
   );
 
-  /**
-   * Revoke Customer Session
-   * POST /api/v1/shop/customer/auth/logout
-   */
+  // --- Password Recovery Actions ---
+  const requestPasswordRecovery = useCallback(
+    async (method: RecoveryMethod, identifier: string) => {
+      const res = await requestPasswordResetOTP({ method, identifier });
+      return res.message;
+    },
+    []
+  );
+
+  const resendPasswordRecovery = useCallback(
+    async (method: RecoveryMethod, identifier: string) => {
+      const res = await resendPasswordResetOTP({ method, identifier });
+      return res.message;
+    },
+    []
+  );
+
+  const confirmPasswordRecoveryOtp = useCallback(
+    async (method: RecoveryMethod, identifier: string, code: string) => {
+      const res = await confirmPasswordResetOTP({ method, identifier, code });
+      return { reset_token: res.reset_token, expires_at: res.expires_at };
+    },
+    []
+  );
+
+  const resetPassword = useCallback(
+    async (resetToken: string, newPassword: string) => {
+      const res = await resetCustomerPassword({
+        reset_token: resetToken,
+        new_password: newPassword,
+      });
+      return res.message;
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     try {
       await customerClient.post("/api/v1/shop/customer/auth/logout");
     } catch {
-      // Clear client session even if token expired on backend
+      // Continue cleanup
     } finally {
       setCustomerSessionToken(null);
       setCustomer(null);
@@ -277,6 +291,10 @@ export const CustomerAuthProvider = ({
       registerCustomer,
       requestOtp,
       verifyOtp,
+      requestPasswordRecovery,
+      resendPasswordRecovery,
+      confirmPasswordRecoveryOtp,
+      resetPassword,
       logout,
       refreshProfile,
     }),
@@ -287,6 +305,10 @@ export const CustomerAuthProvider = ({
       registerCustomer,
       requestOtp,
       verifyOtp,
+      requestPasswordRecovery,
+      resendPasswordRecovery,
+      confirmPasswordRecoveryOtp,
+      resetPassword,
       logout,
       refreshProfile,
     ]

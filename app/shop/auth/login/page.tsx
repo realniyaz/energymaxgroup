@@ -318,20 +318,16 @@ function CustomerLoginForm() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                    Password *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode("otp");
-                      setError(null);
-                    }}
-                    className="text-[10px] font-semibold text-[#639E1F] hover:underline cursor-pointer"
-                  >
-                    Forgot passcode?
-                  </button>
-                </div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                  Password *
+                </label>
+                <Link
+                  href="/shop/auth/forgot-password"
+                  className="text-[10px] font-semibold text-[#639E1F] hover:underline cursor-pointer"
+                >
+                  Forgot passcode?
+                </Link>
+              </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
                   <input
