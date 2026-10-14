@@ -1,3 +1,4 @@
+// app/admin/layout.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -21,15 +22,22 @@ import {
   User,
   Settings,
   ShoppingBag,
-  Factory,
   FactoryIcon,
   LucideFactory,
   ShoppingCartIcon,
   IndianRupee,
   Notebook,
-  Search
+  Search,
+  PersonStanding,
+  Bell,
+  TagIcon
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
+import { 
+  AdminNotificationProvider, 
+  useAdminNotifications 
+} from "@/context/admin-notification-context";
+import AdminNotificationBell from "@/app/components/admin/AdminNotificationBell";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -39,6 +47,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  badgeCount?: number;
   children?: {
     href: string;
     label: string;
@@ -51,6 +60,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAdminAuth();
+  const { unreadCount } = useAdminNotifications();
 
   // Manage open state for collapsible sub-menus
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
@@ -101,6 +111,12 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
   const navLinks: NavItem[] = [
     { href: "/admin/dashboard", label: "Dashboard Overview", icon: LayoutDashboard },
     { 
+      href: "/admin/notifications", 
+      label: "Notifications", 
+      icon: Bell,
+      badgeCount: unreadCount,
+    },
+    { 
       href: "/admin/staff", 
       label: "Staff & Governance", 
       icon: Users,
@@ -113,6 +129,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
     },
     { href: "/admin/categories", label: "Categories", icon: Network },
     { href: "/admin/products", label: "Products", icon: Package },
+    { href: "/admin/customers", label: "Customers", icon: PersonStanding },
     { 
       href: "/admin/inventory", 
       label: "Inventory", 
@@ -121,20 +138,21 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
         { href: "/admin/inventory/warehouses", label: "Warehouses", icon: FactoryIcon },
         { href: "/admin/inventory/stock", label: "Stock IN-OUT", icon: Notebook },
         { href: "/admin/inventory/balances", label: "Stock Balances", icon: ShoppingCartIcon },
-        { href: "/admin/inventory/movements", label: "Movements", icon: IndianRupee  },
-        { href: "/admin/inventory/reservations", label: "Reservations", icon: FactoryIcon  },
-        { href: "/admin/inventory/adjustments", label: "Adjustments", icon: Search  },
+        { href: "/admin/inventory/movements", label: "Movements", icon: IndianRupee },
+        { href: "/admin/inventory/reservations", label: "Reservations", icon: FactoryIcon },
+        { href: "/admin/inventory/adjustments", label: "Adjustments", icon: Search },
       ]
     },
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
     { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
+    { href: "/admin/coupons", label: "Coupons", icon: TagIcon },
     { href: "/admin/sessions", label: "Active Sessions", icon: ShieldAlert },
   ];
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] font-sans selection:bg-[#8CC63F]/30 flex flex-col lg:flex-row overflow-x-hidden">
       
-      {/* Mobile Header Toggle */}
+      {/* Mobile Header Bar */}
       <div className="lg:hidden flex items-center justify-between px-6 py-3 bg-[#172B15] text-white border-b border-[#2D5A1E]/30 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-sm shrink-0">
@@ -154,13 +172,19 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
             <span className="text-xs font-serif text-white tracking-tight">EnergyMax Portal</span>
           </div>
         </div>
-        <button 
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 rounded-xl bg-white/10 text-white focus:outline-none hover:bg-white/20 transition-colors"
-          aria-label="Toggle Menu"
-        >
-          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+
+        <div className="flex items-center space-x-2">
+          {/* Notification bell on mobile top bar */}
+          <AdminNotificationBell />
+
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-xl bg-white/10 text-white focus:outline-none hover:bg-white/20 transition-colors"
+            aria-label="Toggle Menu"
+          >
+            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Admin Sidebar Navigation */}
@@ -168,9 +192,9 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
         fixed inset-y-0 left-0 z-40 w-72 bg-[#172B15] text-white p-6 flex flex-col justify-between border-r border-[#2D5A1E]/30 transition-transform duration-300 lg:translate-x-0
         ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
       `}>
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto pr-1 scrollbar-thin">
           
-          {/* Brand & Logo Header Box with White Background */}
+          {/* Brand & Logo Header Box */}
           <Link 
             href="/admin/dashboard" 
             className="flex items-center space-x-3.5 p-2 rounded-2xl hover:bg-white/5 transition-colors group"
@@ -195,7 +219,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
             </div>
           </Link>
 
-          {/* Navigation Links with Sub-Navigation Accordion */}
+          {/* Navigation Links */}
           <nav className="space-y-1.5 pt-2">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -271,14 +295,22 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
                   key={link.href}
                   href={link.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
                     isActive
                       ? "bg-[#8CC63F]/20 text-[#8CC63F] border border-[#8CC63F]/30 shadow-sm"
                       : "text-neutral-300 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{link.label}</span>
+                  <div className="flex items-center space-x-3">
+                    <Icon className="w-4 h-4" />
+                    <span>{link.label}</span>
+                  </div>
+
+                  {typeof link.badgeCount === "number" && link.badgeCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#8CC63F] text-[#172B15] shadow-xs">
+                      {link.badgeCount > 99 ? "99+" : link.badgeCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -299,7 +331,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
 
           <button
             onClick={() => logout()}
-            className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-bold uppercase tracking-wider hover:bg-red-500/20 transition-all"
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-bold uppercase tracking-wider hover:bg-red-500/20 transition-all cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
             <span>Sign Out</span>
@@ -315,10 +347,43 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
         />
       )}
 
-      {/* Main Admin Content Wrapper */}
-      <main className="flex-1 lg:ml-72 min-h-screen bg-[#FAFAF7] p-6 sm:p-10 lg:p-12">
-        {children}
-      </main>
+      {/* Main Admin Workspace Container */}
+      <div className="flex-1 lg:ml-72 min-h-screen flex flex-col min-w-0">
+        
+        {/* Persistent Desktop Top Bar */}
+        <header className="hidden lg:flex h-16 bg-white border-b border-[#2D5A1E]/15 px-8 items-center justify-between sticky top-0 z-30 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F]">
+              EnergyMax OS
+            </span>
+            <span className="text-neutral-300">/</span>
+            <span className="text-xs font-medium text-neutral-500">
+              Administrative Control Suite
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-4">
+            {/* Notification Bell Popover */}
+            <AdminNotificationBell />
+
+            <div className="h-4 w-[1px] bg-neutral-200" />
+
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-full bg-[#8CC63F]/20 text-[#2D5A1E] font-bold text-xs flex items-center justify-center uppercase border border-[#8CC63F]/40">
+                {user.username?.[0] || "A"}
+              </div>
+              <span className="text-xs font-semibold text-[#172B15]">
+                {user.username}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Dynamic Route Pages */}
+        <main className="flex-1 bg-[#FAFAF7] p-6 sm:p-10 lg:p-12 overflow-y-auto">
+          {children}
+        </main>
+      </div>
 
     </div>
   );
@@ -327,7 +392,9 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <AdminAuthProvider>
-      <AdminLayoutContent>{children}</AdminLayoutContent>
+      <AdminNotificationProvider>
+        <AdminLayoutContent>{children}</AdminLayoutContent>
+      </AdminNotificationProvider>
     </AdminAuthProvider>
   );
 }

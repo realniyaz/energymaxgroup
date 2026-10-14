@@ -36,6 +36,8 @@ import {
   verifyPayment,
 } from "@/lib/services/paymentService";
 import { loadCashfreeSDK } from "@/lib/cashfree";
+import CheckoutCouponBox from "@/app/components/checkout/CheckoutCouponBox";
+import { CouponApplyResponse } from "@/lib/services/couponService";
 
 const LABEL_ICONS: Record<string, React.ReactNode> = {
   Home: <Home className="w-4 h-4" />,
@@ -129,7 +131,7 @@ export default function CheckoutPage({
     };
   }, [checkoutId, isAuthenticated, authLoading, router]);
 
-  // 2. High-Performance Countdown Timer (Guards against TS2769 with strict narrowing)
+  // 2. High-Performance Countdown Timer
   useEffect(() => {
     const expiresAt = checkout?.expires_at;
     if (!expiresAt) return;
@@ -174,7 +176,22 @@ export default function CheckoutPage({
     }
   }, [checkoutId]);
 
-  // 4. Confirm Checkout -> Order -> Cashfree SDK -> Verify Payment
+  // 4. Reactive Coupon Updated Callback
+  const handleCouponUpdated = (res: CouponApplyResponse) => {
+    setCheckout((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        coupon_code: res.coupon_code,
+        discount_amount: res.discount_amount,
+        subtotal: res.subtotal,
+        tax_amount: res.tax_amount,
+        total_amount: res.total_amount,
+      };
+    });
+  };
+
+  // 5. Confirm Checkout -> Order -> Cashfree SDK -> Verify Payment
   const handleConfirmAndPay = async () => {
     if (!selectedAddressPublicId) {
       setError("Please select a delivery address before confirming.");
@@ -293,6 +310,8 @@ export default function CheckoutPage({
       </div>
     );
   }
+
+  const discountAmount = Number(checkout?.discount_amount || 0);
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-12 px-4 sm:px-6 lg:px-12 font-sans">
@@ -416,7 +435,7 @@ export default function CheckoutPage({
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Order Summary & Confirm Action */}
+          {/* RIGHT COLUMN: Order Summary, Coupon Box & Confirm Action */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-xs space-y-6">
               <div className="border-b border-neutral-100 pb-4">
@@ -448,20 +467,45 @@ export default function CheckoutPage({
                 ))}
               </div>
 
+              {/* Coupon Redemption Box */}
+              <CheckoutCouponBox
+                checkoutPublicId={checkoutId}
+                currentCouponCode={(checkout as any)?.coupon_code}
+                discountPercent={(checkout as any)?.discount_percent}
+                onCouponUpdated={handleCouponUpdated}
+              />
+
               {/* Price Calculations */}
               <div className="space-y-2 pt-2 text-xs text-neutral-600">
                 <div className="flex items-center justify-between">
                   <span>Subtotal</span>
                   <span className="font-mono">₹{Number(checkout?.subtotal || 0).toLocaleString("en-IN")}</span>
                 </div>
+
+                {discountAmount > 0 && (
+                  <div className="flex items-center justify-between text-[#2D5A1E] font-medium">
+                    <div className="flex items-center space-x-1">
+                      <span>Promotional Discount</span>
+                      {(checkout as any)?.coupon_code && (
+                        <span className="font-mono text-[10px] bg-[#8CC63F]/20 px-1.5 py-0.5 rounded">
+                          {(checkout as any).coupon_code}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono font-bold">- ₹{discountAmount.toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <span>Cold-Chain Express Delivery</span>
                   <span className="text-[#639E1F] font-bold text-[10px] uppercase">Complimentary</span>
                 </div>
+
                 <div className="flex items-center justify-between">
                   <span>GST & Formulation Taxes</span>
                   <span className="font-mono">₹{Number(checkout?.tax_amount || 0).toLocaleString("en-IN")}</span>
                 </div>
+
                 <div className="flex items-center justify-between text-base font-serif text-[#172B15] pt-3 border-t border-neutral-100">
                   <span>Total Investment</span>
                   <span>₹{Number(checkout?.total_amount || 0).toLocaleString("en-IN")}</span>
@@ -489,7 +533,7 @@ export default function CheckoutPage({
               </button>
 
               <p className="text-[10px] text-center text-neutral-400">
-                By confirming, you lock this batch allocation under 256-bit encrypted patron terms.
+                By confirming, you lock this batch allocation.
               </p>
             </div>
           </div>

@@ -142,7 +142,7 @@ export default function ProfessionalOverviewSection() {
                 onClick={(e) => e.stopPropagation()}
               >
                 {slideImages.map((_, dotIdx) => (
-                  <button
+                  <button suppressHydrationWarning
                     key={dotIdx}
                     onClick={() => setCurrentIndex(dotIdx)}
                     aria-label={`Go to slide ${dotIdx + 1}`}

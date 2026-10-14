@@ -3,7 +3,8 @@ import { customerClient } from "@/lib/customer-client";
 
 export interface CheckoutItem {
   public_id: string;
-  product_public_id: string;
+  product_public_id?: string;
+  product_id?: number;
   variant_public_id?: string;
   product_name: string;
   quantity: number;
@@ -11,19 +12,43 @@ export interface CheckoutItem {
   subtotal: number | string;
 }
 
+export type CheckoutStatus =
+  | "created"
+  | "pricing_locked"
+  | "expired"
+  | "order_created"
+  | "completed"
+  | "cancelled";
+
 export interface CheckoutResponse {
   public_id: string;
   customer_id?: number | string;
-  status: "draft" | "confirmed" | "completed" | "expired" | "cancelled";
+  status: CheckoutStatus;
   selected_address_id?: number | string | null;
   items: CheckoutItem[];
   subtotal: number | string;
   tax_amount: number | string;
+  shipping_amount?: number | string;
   discount_amount: number | string;
   total_amount: number | string;
-  currency: string;
+  coupon_id?: number | null;
+  coupon_code?: string | null;
+  discount_percent?: number | null;
+  currency?: string;
   expires_at?: string;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface CouponApplyResponse {
+  checkout_public_id: string;
+  coupon_code: string | null;
+  discount_percent: number | null;
+  subtotal: number | string;
+  discount_amount: number | string;
+  shipping_amount: number | string;
+  tax_amount: number | string;
+  total_amount: number | string;
 }
 
 /**
@@ -72,6 +97,34 @@ export async function selectCheckoutAddress(
 export async function confirmCheckout(checkoutPublicId: string): Promise<CheckoutResponse> {
   const response = await customerClient.post<CheckoutResponse>(
     `/api/v1/shop/checkout/${checkoutPublicId}/confirm`
+  );
+  return response.data;
+}
+
+/**
+ * POST /api/v1/shop/checkout/{checkout_public_id}/coupon
+ * Applies a promotional coupon to the checkout session.
+ */
+export async function applyCheckoutCoupon(
+  checkoutPublicId: string,
+  code: string
+): Promise<CouponApplyResponse> {
+  const response = await customerClient.post<CouponApplyResponse>(
+    `/api/v1/shop/checkout/${checkoutPublicId}/coupon`,
+    { code: code.trim().toUpperCase() }
+  );
+  return response.data;
+}
+
+/**
+ * DELETE /api/v1/shop/checkout/{checkout_public_id}/coupon
+ * Removes the currently applied coupon from the checkout session.
+ */
+export async function removeCheckoutCoupon(
+  checkoutPublicId: string
+): Promise<CouponApplyResponse> {
+  const response = await customerClient.delete<CouponApplyResponse>(
+    `/api/v1/shop/checkout/${checkoutPublicId}/coupon`
   );
   return response.data;
 }

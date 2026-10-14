@@ -23,13 +23,16 @@ import {
   ArrowBigRight,
   ArrowRight,
   Heart,
+  Bell,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 import { useCart } from "@/context/cart-context";
+import { useCustomerNotifications } from "@/context/customer-notification-context";
 import CartDrawer from "./cart/CartDrawer";
+import NotificationBell from "./notifications/NotificationBell";
 import { CATALOG_PRODUCTS, CatalogProduct } from "@/data/catalogProducts";
 
 // Demographic Collections for Products Dropdown
@@ -65,6 +68,7 @@ export default function LuxuryNavbar() {
   const router = useRouter();
   const { customer, logout } = useCustomerAuth();
   const { totalItems, setIsOpen: setCartOpen } = useCart();
+  const { unreadCount } = useCustomerNotifications();
 
   // Navigation UI states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -304,6 +308,21 @@ export default function LuxuryNavbar() {
                             <span>My Profile</span>
                           </Link>
                           <Link
+                            href="/shop/account/notifications"
+                            onClick={() => setIsUserMenuOpen(false)}
+                            className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <Bell className="w-3.5 h-3.5 text-[#639E1F]" />
+                              <span>Notifications</span>
+                            </div>
+                            {unreadCount > 0 && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#8CC63F]/20 text-[#2D5A1E]">
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </span>
+                            )}
+                          </Link>
+                          <Link
                             href="/account/addresses"
                             onClick={() => setIsUserMenuOpen(false)}
                             className="flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-[#F2F8ED] text-neutral-700 hover:text-[#172B15] transition-colors"
@@ -455,7 +474,7 @@ export default function LuxuryNavbar() {
             </nav>
 
             {/* Right Nav Action Controls */}
-            <div className="flex items-center space-x-1.5 sm:space-x-4 shrink-0">
+            <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
               {/* Desktop Search Bar */}
               <div className="hidden md:flex items-center relative" ref={searchContainerRef}>
                 <div className="relative">
@@ -542,6 +561,9 @@ export default function LuxuryNavbar() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* In-App Customer Notifications Bell */}
+              {mounted && customer && <NotificationBell />}
 
               {/* Shopping Bag Button */}
               <button
@@ -673,11 +695,30 @@ export default function LuxuryNavbar() {
                         My Profile
                       </Link>
                       <Link
+                        href="/shop/account/orders"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="p-2 rounded-xl bg-[#FAFAF7] border border-neutral-200 text-center hover:bg-[#F2F8ED]"
+                      >
+                        My Orders
+                      </Link>
+                      <Link
                         href="/account/addresses"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="p-2 rounded-xl bg-[#FAFAF7] border border-neutral-200 text-center hover:bg-[#F2F8ED]"
                       >
                         Addresses
+                      </Link>
+                      <Link
+                        href="/shop/account/notifications"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="p-2 rounded-xl bg-[#FAFAF7] border border-neutral-200 text-center hover:bg-[#F2F8ED] flex items-center justify-center space-x-1"
+                      >
+                        <span>Notifications</span>
+                        {mounted && unreadCount > 0 && (
+                          <span className="w-4 h-4 rounded-full bg-[#8CC63F] text-[#172B15] text-[9px] font-bold flex items-center justify-center">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
                       </Link>
                     </div>
                   </div>
