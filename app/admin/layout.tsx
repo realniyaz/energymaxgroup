@@ -30,7 +30,8 @@ import {
   Search,
   PersonStanding,
   Bell,
-  TagIcon
+  TagIcon,
+  LucideGitGraph
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
 import { 
@@ -146,6 +147,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
     { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
     { href: "/admin/coupons", label: "Coupons", icon: TagIcon },
+    { href: "/admin/analytics", label: "Analytics", icon: LucideGitGraph },
     { href: "/admin/sessions", label: "Active Sessions", icon: ShieldAlert },
   ];
 

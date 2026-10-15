@@ -214,7 +214,7 @@ function CustomerLoginForm() {
             className="text-xs font-bold uppercase tracking-wider text-neutral-400 hover:text-[#8CC63F] transition-colors flex items-center space-x-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Boutique</span>
+            <span>Return to Shop</span>
           </Link>
         </div>
 

@@ -167,7 +167,7 @@ export default function AdminLoginPage() {
               </label>
               <div className="relative">
                 <User className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-                <input
+                <input suppressHydrationWarning
                   type="text"
                   required
                   value={username}
