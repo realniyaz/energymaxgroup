@@ -31,7 +31,8 @@ import {
   PersonStanding,
   Bell,
   TagIcon,
-  LucideGitGraph
+  LucideGitGraph,
+  Users2
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
 import { 
@@ -145,6 +146,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
       ]
     },
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
+    { href: "/admin/affiliates", label: "Affiliates", icon: Users2 },
     { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
     { href: "/admin/coupons", label: "Coupons", icon: TagIcon },
     { href: "/admin/analytics", label: "Analytics", icon: LucideGitGraph },
