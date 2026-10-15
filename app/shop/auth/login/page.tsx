@@ -1,6 +1,7 @@
+// app/shop/auth/login/page.tsx
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, Suspense, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,6 +18,7 @@ import {
   Briefcase,
   ArrowRight,
   ExternalLink,
+  ShieldAlert,
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 
@@ -26,69 +28,95 @@ function CustomerLoginForm() {
   const redirectUrl = searchParams.get("redirect") || "/shop";
 
   const { loginWithPassword, requestOtp, verifyOtp } = useCustomerAuth();
+  const [, startTransition] = useTransition();
 
-  const [authMode, setAuthMode] = useState<"password" | "otp">("password");
+  const [authMode, setAuthMode] = useState<"password" | "otp" | "verify">("password");
 
-  // Form State
+  // Password state
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+
+  // OTP Login state
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpSuccessMsg, setOtpSuccessMsg] = useState("");
 
+  // Verification Desk State
+  const [verifyEmail, setVerifyEmail] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyStep, setVerifyStep] = useState<"request" | "confirm">("request");
+  const [unverifiedNotice, setUnverifiedNotice] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 1. Password Login
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setUnverifiedNotice(null);
     setLoading(true);
 
     try {
       await loginWithPassword(identifier.trim(), password);
-      router.push(redirectUrl);
+      startTransition(() => {
+        router.push(redirectUrl);
+      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === "string"
-          ? detail
-          : err.message || "Invalid customer credentials."
-      );
+      const message =
+        typeof detail === "string" ? detail : err.message || "Invalid customer credentials.";
+
+      // Intercept backend 403 unverified gate
+      if (message.toLowerCase().includes("verify your email")) {
+        setUnverifiedNotice(identifier.trim());
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // 2. Request Login OTP
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      await requestOtp(otpEmail.trim(), "email", "login");
+      await requestOtp(otpEmail.trim().toLowerCase(), "email", "login");
       setOtpSent(true);
-      setOtpSuccessMsg(`A 6-digit code has been sent to ${otpEmail.trim()}.`);
+      setOtpSuccessMsg(`A 6-digit passcode has been sent to ${otpEmail.trim().toLowerCase()}.`);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(
+      const message =
         typeof detail === "string"
           ? detail
-          : err.message || "Unable to dispatch OTP code. Please check your email."
-      );
+          : err.message || "Unable to dispatch OTP code. Please check your email.";
+
+      if (message.toLowerCase().includes("verify your email")) {
+        setUnverifiedNotice(otpEmail.trim());
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // 3. Confirm Login OTP
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      await verifyOtp(otpEmail.trim(), otpCode.trim(), "email", "login");
-      router.push(redirectUrl);
+      await verifyOtp(otpEmail.trim().toLowerCase(), otpCode.trim(), "email", "login");
+      startTransition(() => {
+        router.push(redirectUrl);
+      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(
@@ -101,14 +129,63 @@ function CustomerLoginForm() {
     }
   };
 
+  // 4. Dispatch Email Verification Code (Registration Purpose)
+  const handleRequestRegistrationOtp = async (overrideEmail?: string) => {
+    const target = (overrideEmail || verifyEmail).trim().toLowerCase();
+    if (!target) return;
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      await requestOtp(target, "email", "registration");
+      setVerifyEmail(target);
+      setVerifyStep("confirm");
+      setAuthMode("verify");
+      setUnverifiedNotice(null);
+      setOtpSuccessMsg(`A verification code was dispatched to ${target}.`);
+    } catch (err: any) {
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Unable to send verification code."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 5. Confirm Registration Code & Activate Account
+  const handleConfirmRegistrationOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      await verifyOtp(verifyEmail.trim().toLowerCase(), verifyCode.trim(), "email", "registration");
+      startTransition(() => {
+        router.push(redirectUrl);
+      });
+    } catch (err: any) {
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Invalid or expired verification code."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col lg:flex-row text-[#172B15]">
-      {/* Left Visual Panel: Optimized GPU-accelerated backdrop */}
+      {/* Left Visual Brand Panel */}
       <div className="relative hidden lg:flex lg:w-1/2 bg-[#172B15] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden border-r border-[#2D5A1E]/30 select-none">
         <div className="absolute -top-24 -left-24 w-80 h-80 bg-[#8CC63F]/15 rounded-full blur-2xl pointer-events-none will-change-transform" />
         <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-[#2D5A1E]/40 rounded-full blur-2xl pointer-events-none will-change-transform" />
 
-        {/* Brand Header */}
         <div className="relative z-10 flex items-center justify-between">
           <Link href="/shop" prefetch={false} className="flex items-center space-x-3 group">
             <div className="w-11 h-11 bg-white/10 rounded-2xl p-2 border border-white/15 flex items-center justify-center shadow-xs group-hover:border-[#8CC63F]/50 transition-colors">
@@ -141,7 +218,6 @@ function CustomerLoginForm() {
           </Link>
         </div>
 
-        {/* Hero Showcase Card */}
         <div className="relative z-10 my-auto py-8 space-y-8 max-w-lg">
           <div className="space-y-3">
             <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-[#8CC63F]/15 border border-[#8CC63F]/30">
@@ -184,7 +260,6 @@ function CustomerLoginForm() {
           </div>
         </div>
 
-        {/* Security Badge */}
         <div className="relative z-10 flex items-center space-x-2 text-neutral-400 pt-4 border-t border-white/10">
           <ShieldCheck className="w-4 h-4 text-[#8CC63F]" />
           <span className="text-[10px] uppercase tracking-wider font-medium">
@@ -197,7 +272,7 @@ function CustomerLoginForm() {
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 lg:p-16 bg-[#FAFAF7]">
         <div className="max-w-md w-full bg-white text-[#172B15] p-8 sm:p-10 rounded-3xl border border-[#2D5A1E]/15 shadow-lg space-y-6 relative">
           
-          {/* Mobile Back Link & Header */}
+          {/* Mobile Back Link */}
           <div className="flex items-center justify-between lg:hidden pb-4 border-b border-neutral-100">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-lg bg-[#172B15] p-1.5 flex items-center justify-center">
@@ -213,87 +288,134 @@ function CustomerLoginForm() {
           {/* Heading */}
           <div className="space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
-              Direct Customer Access
+              {authMode === "verify" ? "Account Activation" : "Direct Customer Access"}
             </span>
             <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-[#172B15]">
-              Client <span className="font-serif italic text-[#2D5A1E]">Sign In</span>
+              {authMode === "verify" ? (
+                <>Verify <span className="font-serif italic text-[#2D5A1E]">Email Address</span></>
+              ) : (
+                <>Client <span className="font-serif italic text-[#2D5A1E]">Sign In</span></>
+              )}
             </h1>
             <p className="text-xs text-neutral-500">
-              Welcome back. Choose your preferred authentication method.
+              {authMode === "verify"
+                ? "Enter your registered email to receive an activation passcode."
+                : "Welcome back. Choose your preferred authentication method."}
             </p>
           </div>
 
           {/* Partner Ecosystem Banner */}
-          <div className="p-3.5 rounded-2xl bg-[#F2F8ED] border border-[#639E1F]/25 flex items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-xl bg-[#639E1F]/15 text-[#2D5A1E] flex items-center justify-center shrink-0">
-                <Briefcase className="w-4 h-4" />
+          {authMode !== "verify" && (
+            <div className="p-3.5 rounded-2xl bg-[#F2F8ED] border border-[#639E1F]/25 flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-xl bg-[#639E1F]/15 text-[#2D5A1E] flex items-center justify-center shrink-0">
+                  <Briefcase className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-[#172B15] tracking-tight">Looking to build a business?</p>
+                  <Link
+                    href="/opportunity"
+                    prefetch={false}
+                    className="text-[11px] font-medium text-[#2D5A1E] hover:text-[#639E1F] inline-flex items-center space-x-1 group"
+                  >
+                    <span>Become a Partner</span>
+                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-bold text-[#172B15] tracking-tight">Looking to build a business?</p>
-                <Link
-                  href="/opportunity"
-                  prefetch={false}
-                  className="text-[11px] font-medium text-[#2D5A1E] hover:text-[#639E1F] inline-flex items-center space-x-1 group"
-                >
-                  <span>Become a Partner</span>
-                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                </Link>
-              </div>
-            </div>
 
-            <a
-              href="https://energymaxgroup.com/cabinet"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-white border border-[#2D5A1E]/15 text-[#172B15] text-[10px] font-bold uppercase tracking-wider hover:bg-[#172B15] hover:text-white transition-all shadow-xs shrink-0 flex items-center space-x-1"
-            >
-              <span>Partner Sign In</span>
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-          </div>
+              <a
+                href="https://energymaxgroup.com/cabinet"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-white border border-[#2D5A1E]/15 text-[#172B15] text-[10px] font-bold uppercase tracking-wider hover:bg-[#172B15] hover:text-white transition-all shadow-xs shrink-0 flex items-center space-x-1"
+              >
+                <span>Partner Sign In</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            </div>
+          )}
 
           {/* Mode Switcher */}
-          <div className="grid grid-cols-2 p-1 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-bold uppercase tracking-wider">
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode("password");
-                setError(null);
-              }}
-              className={`py-2.5 rounded-xl transition-all cursor-pointer ${
-                authMode === "password"
-                  ? "bg-white text-[#172B15] shadow-xs"
-                  : "text-neutral-400 hover:text-[#172B15]"
-              }`}
-            >
-              Password
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode("otp");
-                setError(null);
-              }}
-              className={`py-2.5 rounded-xl transition-all cursor-pointer ${
-                authMode === "otp"
-                  ? "bg-white text-[#172B15] shadow-xs"
-                  : "text-neutral-400 hover:text-[#172B15]"
-              }`}
-            >
-              Email OTP
-            </button>
-          </div>
+          {authMode !== "verify" ? (
+            <div className="grid grid-cols-2 p-1 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs font-bold uppercase tracking-wider">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("password");
+                  setError(null);
+                  setUnverifiedNotice(null);
+                }}
+                className={`py-2.5 rounded-xl transition-all cursor-pointer ${
+                  authMode === "password"
+                    ? "bg-white text-[#172B15] shadow-xs"
+                    : "text-neutral-400 hover:text-[#172B15]"
+                }`}
+              >
+                Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("otp");
+                  setError(null);
+                  setUnverifiedNotice(null);
+                }}
+                className={`py-2.5 rounded-xl transition-all cursor-pointer ${
+                  authMode === "otp"
+                    ? "bg-white text-[#172B15] shadow-xs"
+                    : "text-neutral-400 hover:text-[#172B15]"
+                }`}
+              >
+                Email OTP
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between pb-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("password");
+                  setError(null);
+                  setOtpSuccessMsg("");
+                }}
+                className="inline-flex items-center space-x-1 text-xs text-neutral-500 hover:text-[#172B15] cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Sign In</span>
+              </button>
+            </div>
+          )}
 
-          {/* Zero-Runtime Error Alert */}
-          {error && (
+          {/* Unverified Account Reactive Notification */}
+          {unverifiedNotice && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2.5 animate-in fade-in duration-200">
+              <div className="flex items-center space-x-2 font-bold">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Verification Required</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Your email address has not been confirmed yet. Activate your account to sign in.
+              </p>
+              <button
+                type="button"
+                onClick={() => handleRequestRegistrationOtp(unverifiedNotice)}
+                className="w-full py-2 bg-amber-600 text-white rounded-xl font-bold uppercase tracking-wider text-[10px] hover:bg-amber-700 transition-colors shadow-xs cursor-pointer"
+              >
+                Send Activation Code Now
+              </button>
+            </div>
+          )}
+
+          {/* Error Alert */}
+          {error && !unverifiedNotice && (
             <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2 animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Password Form */}
+          {/* MODE 1: PASSWORD FORM */}
           {authMode === "password" && (
             <form onSubmit={handlePasswordLogin} className="space-y-4">
               <div className="space-y-1.5">
@@ -355,10 +477,29 @@ function CustomerLoginForm() {
                   <span>Sign In</span>
                 )}
               </button>
+
+              {/* Dedicated Verification Link */}
+              <div className="text-center pt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("verify");
+                    setVerifyStep("request");
+                    setError(null);
+                    setUnverifiedNotice(null);
+                    if (identifier.includes("@")) {
+                      setVerifyEmail(identifier);
+                    }
+                  }}
+                  className="text-[11px] text-[#2D5A1E] hover:text-[#639E1F] hover:underline font-medium cursor-pointer"
+                >
+                  Unverified account? Complete email verification
+                </button>
+              </div>
             </form>
           )}
 
-          {/* Email OTP Form */}
+          {/* MODE 2: EMAIL OTP FORM */}
           {authMode === "otp" && (
             <div className="space-y-4">
               {otpSuccessMsg && (
@@ -402,6 +543,22 @@ function CustomerLoginForm() {
                       <span>Send 6-Digit Code</span>
                     )}
                   </button>
+
+                  <div className="text-center pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("verify");
+                        setVerifyStep("request");
+                        setError(null);
+                        setUnverifiedNotice(null);
+                        setVerifyEmail(otpEmail);
+                      }}
+                      className="text-[11px] text-[#2D5A1E] hover:text-[#639E1F] hover:underline font-medium cursor-pointer"
+                    >
+                      Unverified account? Complete email verification
+                    </button>
+                  </div>
                 </form>
               ) : (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -468,6 +625,122 @@ function CustomerLoginForm() {
             </div>
           )}
 
+          {/* MODE 3: DIRECT REGISTRATION VERIFICATION DESK */}
+          {authMode === "verify" && (
+            <div className="space-y-4">
+              {otpSuccessMsg && (
+                <div className="p-3.5 rounded-2xl bg-[#8CC63F]/15 border border-[#8CC63F]/30 text-[#172B15] text-xs flex items-center space-x-2 animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-4 h-4 text-[#2D5A1E] shrink-0" />
+                  <span>{otpSuccessMsg}</span>
+                </div>
+              )}
+
+              {verifyStep === "request" ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleRequestRegistrationOtp();
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                      Unverified Account Email *
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                      <input
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={verifyEmail}
+                        onChange={(e) => setVerifyEmail(e.target.value)}
+                        placeholder="client@energymax.com"
+                        className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-xs text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || !verifyEmail.trim()}
+                    className="w-full py-3.5 rounded-2xl bg-[#075637] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#064b35] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending Activation Code...</span>
+                      </>
+                    ) : (
+                      <span>Dispatch Verification Code</span>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleConfirmRegistrationOtp} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                        6-Digit Verification Code *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVerifyStep("request");
+                          setVerifyCode("");
+                        }}
+                        className="text-[10px] font-semibold text-[#639E1F] hover:underline cursor-pointer"
+                      >
+                        Change Email
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <KeyRound className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="one-time-code"
+                        required
+                        maxLength={6}
+                        value={verifyCode}
+                        onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                        placeholder="123456"
+                        className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl px-4 py-3 pl-11 text-sm font-mono tracking-widest text-[#172B15] placeholder:text-neutral-400 focus:outline-none focus:border-[#639E1F] transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || verifyCode.length < 6}
+                    className="w-full py-3.5 rounded-2xl bg-[#075637] text-white text-xs font-bold uppercase tracking-widest hover:bg-[#064b35] transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shadow-xs cursor-pointer"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Activating Account...</span>
+                      </>
+                    ) : (
+                      <span>Activate & Enter Store</span>
+                    )}
+                  </button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => handleRequestRegistrationOtp()}
+                      className="text-xs text-neutral-500 hover:text-[#2D5A1E] underline font-medium cursor-pointer"
+                    >
+                      Didn&apos;t receive code? Resend Code
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
           {/* Registration Navigation Link */}
           <div className="pt-4 border-t border-neutral-100 flex items-center justify-between text-xs">
             <span className="text-neutral-500">First time client?</span>
@@ -486,7 +759,6 @@ function CustomerLoginForm() {
   );
 }
 
-// Lightweight static skeleton fallback for instant perceived load
 function LoginSkeleton() {
   return (
     <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center">
