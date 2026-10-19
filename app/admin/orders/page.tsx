@@ -11,7 +11,11 @@ import {
   Loader2,
   AlertCircle,
   Eye,
-  Filter,
+  RefreshCw,
+  ShoppingBag,
+  Clock,
+  CheckCircle2,
+  Truck,
 } from "lucide-react";
 import {
   getAdminOrders,
@@ -22,8 +26,9 @@ const STATUS_FILTERS = [
   { label: "All Statuses", value: "" },
   { label: "Pending Payment", value: "pending_payment" },
   { label: "Paid", value: "paid" },
-  { label: "Processing", value: "processing" },
+  { label: "Packed", value: "packed" },
   { label: "Shipped", value: "shipped" },
+  { label: "Out For Delivery", value: "out_for_delivery" },
   { label: "Delivered", value: "delivered" },
   { label: "Cancelled", value: "cancelled" },
 ];
@@ -76,8 +81,12 @@ export default function AdminOrdersPage() {
         return "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40";
       case "pending_payment":
         return "bg-amber-100 text-amber-800 border border-amber-200";
+      case "packed":
+        return "bg-purple-100 text-purple-800 border border-purple-200";
       case "shipped":
         return "bg-blue-100 text-blue-800 border border-blue-200";
+      case "out_for_delivery":
+        return "bg-indigo-100 text-indigo-800 border border-indigo-200";
       case "delivered":
         return "bg-emerald-100 text-emerald-800 border border-emerald-200";
       case "cancelled":
@@ -88,47 +97,57 @@ export default function AdminOrdersPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
             Cold-Chain Operations
           </span>
-          <h1 className="text-2xl font-serif font-bold text-[#172B15]">
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#172B15]">
             Customer Orders ({totalOrders})
           </h1>
+          <p className="text-xs text-neutral-500 pt-0.5">
+            Monitor incoming formulation orders, payments, and dispatch progress.
+          </p>
         </div>
 
-        {/* Search and Filters */}
+        {/* Search, Filter & Refresh */}
         <div className="flex flex-wrap items-center gap-3">
           <form onSubmit={handleSearchSubmit} className="relative">
-            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by order #, patron..."
-              className="bg-white border border-[#2D5A1E]/15 rounded-xl pl-9 pr-4 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] w-56"
+              placeholder="Search order #, patron..."
+              className="bg-white border border-[#2D5A1E]/15 rounded-xl pl-9 pr-3 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] w-56 font-mono"
             />
           </form>
 
-          <div className="relative">
-            <select
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-              className="bg-white border border-[#2D5A1E]/15 rounded-xl px-3 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] cursor-pointer"
-            >
-              {STATUS_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            className="bg-white border border-[#2D5A1E]/15 rounded-xl px-3 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] cursor-pointer"
+          >
+            {STATUS_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={fetchOrders}
+            disabled={loading}
+            className="p-2 rounded-xl bg-white border border-[#2D5A1E]/15 text-[#2D5A1E] hover:bg-[#F2F8ED] transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            title="Refresh Orders"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
         </div>
       </div>
 
@@ -139,7 +158,7 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {/* Orders Table */}
+      {/* Orders Table Card */}
       <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-16 flex flex-col items-center justify-center space-y-3">
@@ -149,9 +168,12 @@ export default function AdminOrdersPage() {
             </span>
           </div>
         ) : orders.length === 0 ? (
-          <div className="p-12 text-center space-y-2">
-            <Package className="w-8 h-8 text-neutral-300 mx-auto" />
-            <p className="text-xs text-neutral-500 font-medium">No orders found matching the filter.</p>
+          <div className="p-16 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-[#FAFAF7] border border-neutral-200 flex items-center justify-center mx-auto text-[#2D5A1E]">
+              <Package className="w-6 h-6 text-[#639E1F]" />
+            </div>
+            <p className="text-sm font-serif font-bold text-[#172B15]">No orders found matching the filter.</p>
+            <p className="text-xs text-neutral-400">Try adjusting your status filter or clearing your search query.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -160,10 +182,10 @@ export default function AdminOrdersPage() {
                 <tr>
                   <th className="px-6 py-4">Order Number</th>
                   <th className="px-6 py-4">Customer</th>
-                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">Placement Date</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Total Amount</th>
-                  <th className="px-6 py-4 text-center">Action</th>
+                  <th className="px-6 py-4 text-center">Dispatch Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -174,7 +196,9 @@ export default function AdminOrdersPage() {
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-semibold text-[#172B15]">{ord.customer_name}</p>
-                      <p className="text-[11px] text-neutral-400">{ord.customer_email || ord.customer_phone || "—"}</p>
+                      <p className="text-[11px] text-neutral-400 font-mono">
+                        {ord.customer_phone || ord.customer_email || "—"}
+                      </p>
                     </td>
                     <td className="px-6 py-4 text-neutral-500 font-mono text-[11px]">
                       {new Date(ord.created_at).toLocaleDateString("en-IN", {
@@ -189,15 +213,15 @@ export default function AdminOrdersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-serif font-bold text-[#172B15]">
-                      ₹{Number(ord.total_amount).toLocaleString("en-IN")}
+                      ₹{Number(ord.total_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <Link
                         href={`/admin/orders/${ord.public_id}`}
-                        className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 hover:bg-[#172B15] hover:text-white transition-all text-neutral-700 font-bold text-[11px]"
+                        className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 hover:bg-[#172B15] hover:text-white transition-all text-neutral-700 font-bold text-[11px] shadow-xs cursor-pointer"
                       >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Manage</span>
+                        <Eye className="w-3.5 h-3.5 text-[#639E1F]" />
+                        <span>Manage & Ship</span>
                       </Link>
                     </td>
                   </tr>
@@ -211,20 +235,20 @@ export default function AdminOrdersPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-100 text-xs">
             <span className="text-neutral-500">
-              Page {page} of {totalPages}
+              Page {page} of {totalPages} ({totalOrders} orders)
             </span>
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="p-2 rounded-xl border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
+                disabled={page <= 1 || loading}
+                className="p-2 rounded-xl border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="p-2 rounded-xl border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
+                disabled={page >= totalPages || loading}
+                className="p-2 rounded-xl border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50 cursor-pointer"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

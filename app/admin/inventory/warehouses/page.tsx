@@ -14,6 +14,8 @@ import {
   Check,
   X,
   ExternalLink,
+  Truck,
+  ShieldCheck,
 } from "lucide-react";
 import {
   getAdminWarehouses,
@@ -21,6 +23,8 @@ import {
   updateAdminWarehouse,
   WarehouseItem,
 } from "@/lib/services/adminWarehouseService";
+
+const SHIPROCKET_DEFAULT_NICKNAME = "warehouse";
 
 export default function AdminWarehousesPage() {
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
@@ -72,11 +76,11 @@ export default function AdminWarehousesPage() {
     try {
       await createAdminWarehouse({
         name: formName.trim(),
-        code: formCode.trim().toUpperCase(),
+        code: formCode.trim().toLowerCase(),
         address: formAddress.trim() || null,
       });
 
-      setSuccess(`Warehouse ${formCode.toUpperCase()} created successfully.`);
+      setSuccess(`Warehouse ${formCode.toLowerCase()} registered successfully.`);
       setIsModalOpen(false);
       setFormName("");
       setFormCode("");
@@ -114,16 +118,19 @@ export default function AdminWarehousesPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto font-sans">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
             Cold-Chain Logistics
           </span>
-          <h1 className="text-2xl font-serif font-bold text-[#172B15]">
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#172B15]">
             Warehouses & Facilities ({warehouses.length})
           </h1>
+          <p className="text-xs text-neutral-500 pt-0.5">
+            Manage inventory hubs and verify the active Shiprocket carrier pickup location.
+          </p>
         </div>
 
         <button
@@ -135,8 +142,25 @@ export default function AdminWarehousesPage() {
           className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-2xl bg-[#172B15] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#2D5A1E] transition-all cursor-pointer shadow-md"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Warehouse</span>
+          <span>Add Facility</span>
         </button>
+      </div>
+
+      {/* Shiprocket Sync Alert Notice */}
+      <div className="p-4 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-xs flex items-center justify-between gap-4">
+        <div className="flex items-center space-x-3 text-xs text-neutral-600">
+          <div className="w-8 h-8 rounded-xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
+            <Truck className="w-4 h-4 text-[#639E1F]" />
+          </div>
+          <div>
+            <span className="font-bold text-[#172B15] block">
+              Active Shiprocket Pickup Location: &ldquo;{SHIPROCKET_DEFAULT_NICKNAME}&rdquo;
+            </span>
+            <span>
+              Orders dispatched via Shiprocket automatically assign pickups to the facility matching code &ldquo;{SHIPROCKET_DEFAULT_NICKNAME}&rdquo;.
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Notifications */}
@@ -161,8 +185,8 @@ export default function AdminWarehousesPage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by hub name, code, or address..."
-          className="w-full bg-white border border-[#2D5A1E]/15 rounded-xl pl-9 pr-4 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+          placeholder="Filter facilities by name, code, or address..."
+          className="w-full bg-white border border-[#2D5A1E]/15 rounded-xl pl-9 pr-4 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] font-mono"
         />
       </div>
 
@@ -189,67 +213,85 @@ export default function AdminWarehousesPage() {
                 <tr>
                   <th className="px-6 py-4">Facility Code</th>
                   <th className="px-6 py-4">Facility Name</th>
-                  <th className="px-6 py-4">Location / Address</th>
-                  <th className="px-6 py-4">Operational Status</th>
+                  <th className="px-6 py-4">Carrier Integration</th>
+                  <th className="px-6 py-4">Address / Cold-Chain Spec</th>
+                  <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {filteredWarehouses.map((wh) => (
-                  <tr
-                    key={wh.public_id}
-                    className="hover:bg-[#FAFAF7]/60 transition-colors"
-                  >
-                    <td className="px-6 py-4 font-mono font-bold text-[#172B15]">
-                      {wh.code}
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-semibold text-[#172B15]">{wh.name}</p>
-                    </td>
-                    <td className="px-6 py-4 text-neutral-600">
-                      {wh.address ? (
-                        <div className="flex items-center space-x-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                          <span className="truncate max-w-xs">{wh.address}</span>
-                        </div>
-                      ) : (
-                        <span className="text-neutral-400 italic">No address on file</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleStatus(wh)}
-                        className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider cursor-pointer ${
-                          wh.is_active
-                            ? "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40"
-                            : "bg-red-50 text-red-700 border border-red-200"
-                        }`}
-                      >
-                        {wh.is_active ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            <span>Active Hub</span>
-                          </>
+              <tbody className="divide-y divide-neutral-100 font-sans">
+                {filteredWarehouses.map((wh) => {
+                  const isShiprocketDefault =
+                    wh.code.toLowerCase() === SHIPROCKET_DEFAULT_NICKNAME;
+
+                  return (
+                    <tr
+                      key={wh.public_id}
+                      className="hover:bg-[#FAFAF7]/60 transition-colors"
+                    >
+                      <td className="px-6 py-4 font-mono font-bold text-[#172B15]">
+                        {wh.code}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-semibold text-[#172B15]">{wh.name}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        {isShiprocketDefault ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40">
+                            <Truck className="w-3 h-3 text-[#639E1F]" />
+                            <span>Shiprocket Primary</span>
+                          </span>
                         ) : (
-                          <>
-                            <X className="w-3 h-3" />
-                            <span>Inactive / Quarantined</span>
-                          </>
+                          <span className="text-[11px] text-neutral-400 font-mono">
+                            Internal Hub
+                          </span>
                         )}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <Link
-                        href={`/admin/inventory/warehouses/${wh.public_id}`}
-                        className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 hover:bg-[#172B15] hover:text-white transition-all text-neutral-700 font-bold text-[11px]"
-                      >
-                        <span>Stock & Setup</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4 text-neutral-600">
+                        {wh.address ? (
+                          <div className="flex items-center space-x-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                            <span className="truncate max-w-xs">{wh.address}</span>
+                          </div>
+                        ) : (
+                          <span className="text-neutral-400 italic">No address on file</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(wh)}
+                          className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider cursor-pointer ${
+                            wh.is_active
+                              ? "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40"
+                              : "bg-red-50 text-red-700 border border-red-200"
+                          }`}
+                        >
+                          {wh.is_active ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <X className="w-3 h-3" />
+                              <span>Quarantined</span>
+                            </>
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <Link
+                          href={`/admin/inventory/warehouses/${wh.public_id}`}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 hover:bg-[#172B15] hover:text-white transition-all text-neutral-700 font-bold text-[11px]"
+                        >
+                          <span>Manage</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -265,23 +307,35 @@ export default function AdminWarehousesPage() {
                 Cold-Chain Facility
               </span>
               <h3 className="text-lg font-serif font-bold text-[#172B15]">
-                Register Warehouse
+                Register Warehouse Facility
               </h3>
             </div>
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-neutral-500">
-                  Warehouse Code *
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-neutral-500">
+                    Warehouse Code *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFormCode(SHIPROCKET_DEFAULT_NICKNAME)}
+                    className="text-[10px] text-[#639E1F] font-bold hover:underline"
+                  >
+                    Set as &ldquo;{SHIPROCKET_DEFAULT_NICKNAME}&rdquo;
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. WH-MUMBAI-01"
+                  placeholder={`e.g. ${SHIPROCKET_DEFAULT_NICKNAME} or WH-BLR-01`}
                   value={formCode}
                   onChange={(e) => setFormCode(e.target.value)}
-                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2.5 text-xs text-[#172B15] font-mono uppercase"
+                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2.5 text-xs text-[#172B15] font-mono lowercase"
                 />
+                <span className="text-[10px] text-neutral-400 block">
+                  Must match your Shiprocket registered pickup address nickname[cite: 5].
+                </span>
               </div>
 
               <div className="space-y-1">
@@ -291,7 +345,7 @@ export default function AdminWarehousesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. West Coast Cold-Storage Center"
+                  placeholder="e.g. EnergyMax Central Cold-Chain Hub"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2.5 text-xs text-[#172B15]"
@@ -300,11 +354,11 @@ export default function AdminWarehousesPage() {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-neutral-500">
-                  Street Address / Spec
+                  Street Address / Specifications
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Address details, cold-storage unit specs..."
+                  placeholder="Storage units, refrigeration temp limits (2–8°C)..."
                   value={formAddress}
                   onChange={(e) => setFormAddress(e.target.value)}
                   className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2 text-xs text-[#172B15]"
@@ -322,7 +376,7 @@ export default function AdminWarehousesPage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold hover:bg-[#2D5A1E] transition-all disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold hover:bg-[#2D5A1E] transition-all disabled:opacity-50 cursor-pointer shadow-md"
                 >
                   {creating ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

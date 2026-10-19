@@ -16,6 +16,8 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
+  Truck,
+  Barcode,
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 import { customerClient } from "@/lib/customer-client";
@@ -46,31 +48,34 @@ export default function CustomerOrdersPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   // Fetch Authenticated Customer Orders
-  const loadOrders = useCallback(async (targetPage: number) => {
-    setLoading(true);
-    setError(null);
+  const loadOrders = useCallback(
+    async (targetPage: number) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const data = await getMyOrders(targetPage, pageSize);
-      setOrders(data.items || []);
-      setTotalPages(data.total_pages || 1);
-      setTotalCount(data.total || 0);
-      setPage(data.page || targetPage);
-    } catch (err: any) {
-      if (err.response?.status === 401) {
-        router.push("/shop/auth/login?redirect=/shop/account/orders");
-        return;
+      try {
+        const data = await getMyOrders(targetPage, pageSize);
+        setOrders(data.items || []);
+        setTotalPages(data.total_pages || 1);
+        setTotalCount(data.total || 0);
+        setPage(data.page || targetPage);
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          router.push("/shop/auth/login?redirect=/shop/account/orders");
+          return;
+        }
+        const detail = err.response?.data?.detail;
+        setError(
+          typeof detail === "string"
+            ? detail
+            : "Unable to retrieve your order history. Please try again."
+        );
+      } finally {
+        setLoading(false);
       }
-      const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === "string"
-          ? detail
-          : "Unable to retrieve your order history. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize, router]);
+    },
+    [pageSize, router]
+  );
 
   useEffect(() => {
     if (authLoading) return;
@@ -129,6 +134,12 @@ export default function CustomerOrdersPage() {
             Payment Pending
           </span>
         );
+      case "packed":
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+            Packed
+          </span>
+        );
       case "processing":
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
@@ -139,8 +150,14 @@ export default function CustomerOrdersPage() {
       case "dispatched":
       case "in_transit":
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
             In Transit
+          </span>
+        );
+      case "out_for_delivery":
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800 border border-indigo-200">
+            Out For Delivery
           </span>
         );
       case "delivered":
@@ -166,7 +183,7 @@ export default function CustomerOrdersPage() {
 
   if (authLoading || (loading && orders.length === 0)) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3">
+      <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3 font-sans">
         <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
         <p className="text-xs uppercase tracking-[0.25em] text-neutral-500 font-bold">
           Retrieving Your Orders...
@@ -178,10 +195,7 @@ export default function CustomerOrdersPage() {
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-8 sm:py-12 px-4 sm:px-6 lg:px-12 font-sans">
       <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
-        
-        {/* =========================================================
-            TOP ACTION BAR: Home & Continue Shopping (Top on all devices)
-           ========================================================= */}
+        {/* Top Action Bar */}
         <div className="flex items-center justify-between gap-3 pb-2">
           <Link
             href="/"
@@ -200,7 +214,7 @@ export default function CustomerOrdersPage() {
           </Link>
         </div>
 
-        {/* Page Title & Manual Order Search Header */}
+        {/* Page Title & Search Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
           <div className="space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
@@ -210,12 +224,15 @@ export default function CustomerOrdersPage() {
               My Orders ({totalCount})
             </h1>
             <p className="text-xs text-neutral-600">
-              Review your purchase history, item summaries, and tracking updates.
+              Review your purchase history, item summaries, and carrier tracking updates[cite: 19].
             </p>
           </div>
 
           {/* Quick Tracking Search Form */}
-          <form onSubmit={handleSearchLookup} className="flex items-center space-x-2 w-full md:w-auto">
+          <form
+            onSubmit={handleSearchLookup}
+            className="flex items-center space-x-2 w-full md:w-auto"
+          >
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
               <input
@@ -273,7 +290,7 @@ export default function CustomerOrdersPage() {
               No Orders Found
             </h2>
             <p className="text-xs text-neutral-500 leading-relaxed">
-              You haven&apos;t placed any orders yet. Visit our shop catalog to explore our products.
+              You haven&apos;t placed any orders yet. Visit our shop catalog to explore our products[cite: 19].
             </p>
             <Link
               href="/shop"
@@ -297,23 +314,38 @@ export default function CustomerOrdersPage() {
               );
 
               const itemsCount =
-                order.items?.reduce((acc, curr) => acc + (curr.quantity || 1), 0) ||
+                order.items?.reduce(
+                  (acc, curr) => acc + (curr.quantity || 1),
+                  0
+                ) ||
                 order.items?.length ||
                 0;
 
               const totalAmount = parseOrderAmount(order.total_amount);
+              const shipment = order.shipment;
 
               return (
                 <div
                   key={order.public_id}
                   className="bg-white rounded-3xl p-5 sm:p-6 border border-[#2D5A1E]/15 shadow-sm hover:border-[#639E1F]/50 transition-all flex flex-col md:flex-row md:items-center justify-between gap-5"
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-2 flex-1">
                     <div className="flex flex-wrap items-center gap-2.5">
                       <span className="font-mono text-sm font-bold text-[#172B15]">
                         {order.order_number}
                       </span>
                       {getStatusBadge(order.status)}
+
+                      {/* Live Courier / AWB Tag */}
+                      {shipment?.awb_code && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#FAFAF7] border border-neutral-200 text-[#2D5A1E]">
+                          <Truck className="w-3 h-3 text-[#639E1F]" />
+                          <span>
+                            {shipment.courier_name || "Courier"}:{" "}
+                            {shipment.awb_code}
+                          </span>
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
@@ -322,7 +354,9 @@ export default function CustomerOrdersPage() {
                         <span>{orderDate}</span>
                       </span>
                       <span>•</span>
-                      <span>{itemsCount} item{itemsCount === 1 ? "" : "s"}</span>
+                      <span>
+                        {itemsCount} item{itemsCount === 1 ? "" : "s"}
+                      </span>
                       {order.shipping_address_snapshot?.city && (
                         <>
                           <span>•</span>
@@ -348,7 +382,11 @@ export default function CustomerOrdersPage() {
                         Total Amount
                       </span>
                       <span className="text-base sm:text-lg font-serif font-bold text-[#172B15]">
-                        ₹{totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹
+                        {totalAmount.toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </span>
                     </div>
 
@@ -356,7 +394,7 @@ export default function CustomerOrdersPage() {
                       href={`/shop/account/orders/${order.public_id}`}
                       className="px-4 py-2.5 rounded-2xl bg-[#FAFAF7] hover:bg-[#172B15] hover:text-white border border-[#2D5A1E]/15 text-[#172B15] text-xs font-bold uppercase tracking-wider transition-all flex items-center space-x-1.5 group shadow-xs shrink-0"
                     >
-                      <span>View Details</span>
+                      <span>Track Order</span>
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
                   </div>
@@ -403,11 +441,11 @@ export default function CustomerOrdersPage() {
               Temperature-Controlled Cold-Chain Shipping
             </span>
             <span>
-              All probiotic orders are shipped under strict cold-storage protocols to protect live cultures until they arrive at your door[cite: 11].
+              All probiotic orders are shipped under strict cold-storage
+              protocols to protect live cultures until they arrive at your door[cite: 19].
             </span>
           </div>
         </div>
-
       </div>
     </div>
   );

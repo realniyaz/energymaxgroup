@@ -22,22 +22,6 @@ export interface OrderItem {
   subtotal: number | string;
 }
 
-export interface OrderTrackingEvent {
-  status: string;
-  label: string;
-  completed: boolean;
-  current: boolean;
-  timestamp: string | null;
-  note: string | null;
-}
-
-export interface OrderTrackingResponse {
-  public_id: string;
-  order_number: string;
-  current_status: string;
-  timeline: OrderTrackingEvent[];
-}
-
 export interface OrderAddress {
   recipient_name?: string;
   phone?: string;
@@ -55,12 +39,57 @@ export interface OrderAddress {
 export type OrderStatus =
   | "pending"
   | "pending_payment"
+  | "paid"
+  | "packed"
   | "processing"
   | "shipped"
+  | "out_for_delivery"
   | "delivered"
   | "cancelled";
 
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
+export interface ShipmentResponse {
+  id: number;
+  order_id: number;
+  shiprocket_order_id: string | null;
+  shiprocket_shipment_id: string | null;
+  awb_code: string | null;
+  courier_name: string | null;
+  status: string;
+  tracking_url: string | null;
+  length_cm: number | string;
+  breadth_cm: number | string;
+  height_cm: number | string;
+  weight_kg: number | string;
+  pickup_token_number: string | null;
+  pickup_scheduled_at: string | null;
+  label_url: string | null;
+  manifest_url: string | null;
+  awb_operation_status: string;
+  pickup_operation_status: string;
+  label_operation_status: string;
+  manifest_operation_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderTrackingEvent {
+  status: string;
+  label: string;
+  completed: boolean;
+  current: boolean;
+  timestamp: string | null;
+  note: string | null;
+}
+
+export interface OrderTrackingResponse {
+  public_id: string;
+  order_number: string;
+  current_status: string;
+  timeline: OrderTrackingEvent[];
+  shipment?: ShipmentResponse | null;
+}
 
 /**
  * Single Order Detail (matches Order entity / checkout conversion)
@@ -83,6 +112,7 @@ export interface OrderResponse {
   items: OrderItem[];
   shipping_address?: OrderAddress;
   shipping_address_snapshot?: OrderAddress;
+  shipment?: ShipmentResponse | null;
   created_at: string;
   updated_at?: string;
 }
@@ -104,6 +134,7 @@ export interface MyOrderSummaryItem {
   shipping_amount: number | string;
   tax_amount: number | string;
   total_amount: number | string;
+  shipment?: ShipmentResponse | null;
   created_at: string;
   updated_at: string;
 }
@@ -127,7 +158,7 @@ export interface OrderListResponse {
 }
 
 /**
- * Utility helper to safely parse decimal strings from the backend
+ * Utility helper to safely parse high-precision decimal strings from the backend
  */
 export function parseOrderAmount(val: number | string | undefined | null): number {
   if (val === null || val === undefined) return 0;
@@ -144,7 +175,7 @@ export function parseOrderAmount(val: number | string | undefined | null): numbe
 
 /**
  * GET /api/v1/shop/orders/my
- * Fetches authenticated customer's paginated order history.
+ * Fetches authenticated customer's paginated order history with attached shipment data.
  */
 export async function getMyOrders(
   page: number = 1,
@@ -191,7 +222,7 @@ export async function getCustomerOrders(
 
 /**
  * GET /api/v1/shop/orders/{order_public_id}
- * Fetches complete details for a single order.
+ * Fetches complete details for a single order including shipment information.
  */
 export async function getOrderByPublicId(
   orderPublicId: string
@@ -204,7 +235,7 @@ export async function getOrderByPublicId(
 
 /**
  * GET /api/v1/shop/orders/{order_public_id}/tracking
- * Fetches order milestone tracking and logistics events.
+ * Fetches order milestone tracking, transit status, and associated carrier shipment details.
  */
 export async function getOrderTracking(
   orderPublicId: string
@@ -217,13 +248,26 @@ export async function getOrderTracking(
 
 /**
  * GET /api/v1/shop/orders/track/{order_number}
- * Public order tracking lookup by order number.
+ * Public order tracking lookup by order number (e.g., EMX-...).
  */
 export async function trackOrderByNumber(
   orderNumber: string
 ): Promise<OrderTrackingResponse> {
   const res = await customerClient.get<OrderTrackingResponse>(
     `/api/v1/shop/orders/track/${orderNumber}`
+  );
+  return res.data;
+}
+
+/**
+ * GET /api/v1/shop/orders/{order_public_id}/shipment
+ * Fetches customer-facing shipment metadata (AWB, courier, tracking URL, and status).
+ */
+export async function getOrderShipment(
+  orderPublicId: string
+): Promise<ShipmentResponse> {
+  const res = await customerClient.get<ShipmentResponse>(
+    `/api/v1/shop/orders/${orderPublicId}/shipment`
   );
   return res.data;
 }

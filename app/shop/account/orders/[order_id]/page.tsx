@@ -1,3 +1,4 @@
+// app/shop/account/orders/[order_id]/page.tsx
 "use client";
 
 import React, { useEffect, useState, use } from "react";
@@ -9,12 +10,21 @@ import {
   AlertCircle,
   Loader2,
   ArrowLeft,
-  Sparkles,
   Lock,
   RotateCcw,
-  Clock,
+  Truck,
+  ExternalLink,
+  Barcode,
+  Calendar,
+  Box,
+  Home,
+  ShoppingBag,
 } from "lucide-react";
-import { customerClient } from "@/lib/customer-client";
+import {
+  getOrderTracking,
+  OrderTrackingResponse,
+  ShipmentResponse,
+} from "@/lib/services/orderService";
 import {
   createPaymentFromOrder,
   verifyPayment,
@@ -22,22 +32,6 @@ import {
   PaymentResponse,
 } from "@/lib/services/paymentService";
 import { loadCashfreeSDK } from "@/lib/cashfree";
-
-interface TimelineEvent {
-  status: string;
-  label: string;
-  completed: boolean;
-  current: boolean;
-  timestamp: string | null;
-  note: string | null;
-}
-
-interface OrderTrackingData {
-  public_id: string;
-  order_number: string;
-  current_status: string;
-  timeline: TimelineEvent[];
-}
 
 export default function OrderDetailsAndTrackingPage({
   params,
@@ -51,15 +45,16 @@ export default function OrderDetailsAndTrackingPage({
   const searchParams = useSearchParams();
   const paymentSuccessQuery = searchParams.get("payment_success") === "true";
 
-  const [order, setOrder] = useState<OrderTrackingData | null>(null);
+  const [order, setOrder] = useState<OrderTrackingResponse | null>(null);
+  const [shipment, setShipment] = useState<ShipmentResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Payment states
+  // Payment recovery states
   const [retryingPayment, setRetryingPayment] = useState(false);
   const [paymentPhase, setPaymentPhase] = useState<string | null>(null);
 
-  // Refund states
+  // Refund modal states
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -68,17 +63,17 @@ export default function OrderDetailsAndTrackingPage({
 
   const fetchTracking = async () => {
     try {
-      // Calls: GET /api/v1/shop/orders/{order_public_id}/tracking
-      const res = await customerClient.get<OrderTrackingData>(
-        `/api/v1/shop/orders/${orderId}/tracking`
-      );
-      setOrder(res.data);
+      const data = await getOrderTracking(orderId);
+      setOrder(data);
+      if (data.shipment) {
+        setShipment(data.shipment);
+      }
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(
         typeof detail === "string"
           ? detail
-          : "Unable to retrieve order tracking history."
+          : "Unable to retrieve tracking history. Please check back shortly."
       );
     } finally {
       setLoading(false);
@@ -105,34 +100,41 @@ export default function OrderDetailsAndTrackingPage({
       setPaymentPhase("Launching gateway...");
       const cashfree = await loadCashfreeSDK();
 
-      cashfree.checkout({
-        paymentSessionId: payment.payment_session_id,
-        redirectTarget: "_modal",
-      }).then(async (result: any) => {
-        if (result.error) {
-          setError(result.error.message || "Payment incomplete.");
-          setRetryingPayment(false);
-          setPaymentPhase(null);
-          return;
-        }
+      cashfree
+        .checkout({
+          paymentSessionId: payment.payment_session_id,
+          redirectTarget: "_modal",
+        })
+        .then(async (result: any) => {
+          if (result.error) {
+            setError(result.error.message || "Payment incomplete or cancelled.");
+            setRetryingPayment(false);
+            setPaymentPhase(null);
+            return;
+          }
 
-        setPaymentPhase("Verifying transaction...");
-        await verifyPayment(payment.public_id, {
-          provider_payment_id: result.paymentDetails?.paymentMessage || undefined,
+          setPaymentPhase("Verifying transaction...");
+          await verifyPayment(payment.public_id, {
+            provider_payment_id:
+              result.paymentDetails?.paymentMessage || undefined,
+          });
+
+          await fetchTracking();
         });
-
-        await fetchTracking();
-      });
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : err.message || "Payment attempt failed.");
+      setError(
+        typeof detail === "string"
+          ? detail
+          : err.message || "Payment attempt failed."
+      );
     } finally {
       setRetryingPayment(false);
       setPaymentPhase(null);
     }
   };
 
-  // Submit Refund
+  // Submit Refund Request
   const handleRefundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmittingRefund(true);
@@ -145,12 +147,14 @@ export default function OrderDetailsAndTrackingPage({
         reason: refundReason.trim() || undefined,
       });
 
-      setRefundMessage("Refund initiated successfully with Cashfree.");
+      setRefundMessage("Refund initiated successfully. Funds will be reversed via Cashfree.");
       setShowRefundModal(false);
       await fetchTracking();
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Failed to initiate refund.");
+      setError(
+        typeof detail === "string" ? detail : "Failed to initiate refund."
+      );
     } finally {
       setSubmittingRefund(false);
     }
@@ -158,10 +162,10 @@ export default function OrderDetailsAndTrackingPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3">
+      <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3 font-sans">
         <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
         <p className="text-xs uppercase tracking-[0.25em] text-neutral-500 font-bold">
-          Consulting Dispatch Manifest...
+          Loading Order & Tracking Details...
         </p>
       </div>
     );
@@ -169,17 +173,27 @@ export default function OrderDetailsAndTrackingPage({
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6 text-center font-sans">
         <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-[#2D5A1E]/15 shadow-xl space-y-4">
           <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
           <h2 className="text-lg font-bold text-[#172B15]">Order Not Found</h2>
-          <p className="text-xs text-neutral-500">{error || "We could not find this order record."}</p>
-          <Link
-            href="/shop/account/orders"
-            className="inline-block px-5 py-2.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider"
-          >
-            Track Another Order
-          </Link>
+          <p className="text-xs text-neutral-500">
+            {error || "We could not find an order matching this record."}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Link
+              href="/shop/account/orders"
+              className="flex-1 py-2.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#172B15] transition-all"
+            >
+              My Orders
+            </Link>
+            <Link
+              href="/shop"
+              className="flex-1 py-2.5 rounded-2xl bg-[#FAFAF7] border border-neutral-200 text-[#172B15] text-xs font-bold uppercase tracking-wider hover:bg-neutral-100 transition-all"
+            >
+              Visit Shop
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -187,36 +201,84 @@ export default function OrderDetailsAndTrackingPage({
 
   const isPending = order.current_status === "pending_payment";
   const isPaid = order.current_status === "paid";
+  const hasAwb = Boolean(shipment?.awb_code);
+  const carrierTrackingLink =
+    shipment?.tracking_url ||
+    (shipment?.awb_code
+      ? `https://shiprocket.co/tracking/${shipment.awb_code}`
+      : null);
+
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "paid":
+        return "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40";
+      case "pending_payment":
+        return "bg-amber-100 text-amber-800 border border-amber-200";
+      case "packed":
+        return "bg-purple-100 text-purple-800 border border-purple-200";
+      case "processing":
+        return "bg-purple-50 text-purple-700 border border-purple-200";
+      case "shipped":
+        return "bg-blue-100 text-blue-800 border border-blue-200";
+      case "out_for_delivery":
+        return "bg-indigo-100 text-indigo-800 border border-indigo-200";
+      case "delivered":
+        return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+      case "cancelled":
+        return "bg-red-100 text-red-800 border border-red-200";
+      default:
+        return "bg-neutral-100 text-neutral-600 border border-neutral-200";
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-12 px-4 sm:px-6 lg:px-12 font-sans">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-8 sm:py-12 px-4 sm:px-6 lg:px-12 font-sans">
+      <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
         
+        {/* Top Quick Actions */}
+        <div className="flex items-center justify-between gap-3 pb-2">
+          <Link
+            href="/"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-white border border-[#2D5A1E]/15 text-xs font-semibold text-[#172B15] hover:bg-[#F2F8ED] hover:border-[#639E1F] transition-all shadow-xs"
+          >
+            <Home className="w-3.5 h-3.5 text-[#639E1F] shrink-0" />
+            <span>Return to Home</span>
+          </Link>
+
+          <Link
+            href="/shop"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-1.5 px-4.5 py-2.5 rounded-2xl bg-[#2D5A1E] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#172B15] transition-all shadow-xs"
+          >
+            <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+            <span>Continue Shopping</span>
+          </Link>
+        </div>
+
         {/* Navigation & Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
           <div className="space-y-1">
             <Link
               href="/shop/account/orders"
-              className="text-xs font-bold uppercase tracking-wider text-neutral-500 hover:text-[#2D5A1E] flex items-center space-x-1 mb-2"
+              className="text-xs font-bold uppercase tracking-wider text-neutral-500 hover:text-[#2D5A1E] flex items-center space-x-1 mb-2 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Lookup</span>
+              <span>Back to My Orders</span>
             </Link>
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl sm:text-3xl font-serif tracking-tight text-[#172B15]">
                 Order <span className="font-mono text-[#639E1F]">{order.order_number}</span>
               </h1>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                isPaid
-                  ? "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40"
-                  : "bg-amber-100 text-amber-800 border border-amber-200"
-              }`}>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getStatusBadge(
+                  order.current_status
+                )}`}
+              >
                 {order.current_status.replace("_", " ")}
               </span>
             </div>
           </div>
 
-          {/* Action CTAs */}
+          {/* Action Buttons */}
           <div className="flex items-center space-x-3">
             {isPending && (
               <button
@@ -253,7 +315,9 @@ export default function OrderDetailsAndTrackingPage({
         {paymentSuccessQuery && (
           <div className="p-4 rounded-2xl bg-[#8CC63F]/15 border border-[#8CC63F]/40 text-[#172B15] text-xs flex items-center space-x-2">
             <CheckCircle2 className="w-5 h-5 text-[#2D5A1E] shrink-0" />
-            <span>Payment successfully confirmed. Laboratory batch preparation has commenced.</span>
+            <span>
+              Payment confirmed! We are now preparing your order for cold-chain dispatch.
+            </span>
           </div>
         )}
 
@@ -271,15 +335,78 @@ export default function OrderDetailsAndTrackingPage({
           </div>
         )}
 
-        {/* Cold-Chain Timeline */}
+        {/* Live Carrier Tracking (Displays once AWB is generated) */}
+        {hasAwb && shipment && (
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
+              <div className="flex items-center space-x-2">
+                <Truck className="w-5 h-5 text-[#639E1F]" />
+                <h2 className="text-lg font-serif font-bold text-[#172B15]">
+                  Carrier & Delivery Details
+                </h2>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                {shipment.status.replace("_", " ")}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-neutral-100 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                  Carrier / Courier
+                </span>
+                <span className="font-semibold text-[#172B15] flex items-center space-x-1.5">
+                  <Box className="w-3.5 h-3.5 text-[#639E1F]" />
+                  <span>{shipment.courier_name || "Express Logistics"}</span>
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-neutral-100 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                  Tracking / AWB Number
+                </span>
+                <span className="font-mono font-bold text-[#172B15] flex items-center space-x-1.5">
+                  <Barcode className="w-3.5 h-3.5 text-[#639E1F]" />
+                  <span>{shipment.awb_code}</span>
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-neutral-100 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                  Shipping Mode
+                </span>
+                <span className="font-semibold text-[#2D5A1E] flex items-center space-x-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-[#639E1F]" />
+                  <span>Cold-Chain Express</span>
+                </span>
+              </div>
+            </div>
+
+            {carrierTrackingLink && (
+              <div className="pt-2 flex justify-end">
+                <a
+                  href={carrierTrackingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#172B15] transition-all shadow-sm"
+                >
+                  <span>Track on Courier Website</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cold-Chain Dispatch Timeline */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-sm space-y-6">
           <div className="border-b border-neutral-100 pb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-serif font-bold text-[#172B15]">
-                Logistics & Dispatch Timeline
+                Order Status & Timeline
               </h2>
               <p className="text-xs text-neutral-500">
-                Live verification of cold-chain microbiology preparation and carrier transit.
+                Step-by-step progress of your order from packaging to delivery.
               </p>
             </div>
             <ShieldCheck className="w-5 h-5 text-[#639E1F]" />
@@ -289,17 +416,25 @@ export default function OrderDetailsAndTrackingPage({
             {order.timeline.map((step, idx) => (
               <div key={idx} className="relative">
                 {/* Status Dot */}
-                <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
-                  step.current
-                    ? "border-[#639E1F] bg-[#639E1F] ring-4 ring-[#8CC63F]/20"
-                    : "border-[#2D5A1E]/30"
-                }`}>
-                  {step.current && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                <div
+                  className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
+                    step.current
+                      ? "border-[#639E1F] bg-[#639E1F] ring-4 ring-[#8CC63F]/20"
+                      : "border-[#2D5A1E]/30"
+                  }`}
+                >
+                  {step.current && (
+                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  )}
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
-                    <span className={`text-xs font-bold ${step.current ? "text-[#2D5A1E]" : "text-neutral-700"}`}>
+                    <span
+                      className={`text-xs font-bold ${
+                        step.current ? "text-[#2D5A1E]" : "text-neutral-700"
+                      }`}
+                    >
                       {step.label}
                     </span>
                     {step.timestamp && (
@@ -313,33 +448,41 @@ export default function OrderDetailsAndTrackingPage({
                       </span>
                     )}
                   </div>
-                  {step.note && <p className="text-xs text-neutral-500">{step.note}</p>}
+                  {step.note && (
+                    <p className="text-xs text-neutral-500">{step.note}</p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Batch Quality Viability Guarantee */}
-        <div className="p-5 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-sm flex items-center space-x-4">
+        {/* Cold-Chain Quality Guarantee */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-white border border-[#2D5A1E]/15 shadow-sm flex items-center space-x-4">
           <div className="w-10 h-10 rounded-2xl bg-[#8CC63F]/20 text-[#2D5A1E] flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-[#639E1F]" />
+            <ShieldCheck className="w-5 h-5 text-[#639E1F]" />
           </div>
           <div className="text-xs text-neutral-600 space-y-0.5">
-            <span className="font-bold text-[#172B15] block">Batch Quality Verification</span>
-            <span>All maXilin formulations are dispatched with serialized temperature indicators guaranteeing 1 Trillion CFU cellular potency.</span>
+            <span className="font-bold text-[#172B15] block">
+              Temperature-Controlled Cold-Chain Shipping
+            </span>
+            <span>
+              All probiotic orders are shipped under strict cold-storage protocols to protect live cultures until they arrive at your door[cite: 11, 12].
+            </span>
           </div>
         </div>
 
       </div>
 
-      {/* REFUND REQUEST MODAL */}
+      {/* Refund Request Modal */}
       {showRefundModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4">
-            <h3 className="text-lg font-serif font-bold text-[#172B15]">Request Payment Refund</h3>
+            <h3 className="text-lg font-serif font-bold text-[#172B15]">
+              Request a Refund
+            </h3>
             <p className="text-xs text-neutral-500">
-              Submit a refund request for Order #{order.order_number}. Cashfree reconciliation will process the reversal.
+              Submit a refund request for Order #{order.order_number}. The payment reversal will be processed via Cashfree.
             </p>
 
             <form onSubmit={handleRefundSubmit} className="space-y-4">
@@ -365,7 +508,7 @@ export default function OrderDetailsAndTrackingPage({
                   rows={3}
                   value={refundReason}
                   onChange={(e) => setRefundReason(e.target.value)}
-                  placeholder="Detail the reason for return or cancellation..."
+                  placeholder="Please describe the reason for your refund request..."
                   className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-4 py-2 text-xs text-[#172B15]"
                 />
               </div>
@@ -383,14 +526,17 @@ export default function OrderDetailsAndTrackingPage({
                   disabled={submittingRefund}
                   className="px-5 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold hover:bg-[#2D5A1E] disabled:opacity-50 cursor-pointer"
                 >
-                  {submittingRefund ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Refund"}
+                  {submittingRefund ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Confirm Refund"
+                  )}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }
