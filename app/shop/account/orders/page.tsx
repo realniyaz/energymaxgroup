@@ -17,7 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Truck,
-  Barcode,
 } from "lucide-react";
 import { useCustomerAuth } from "@/context/customer-auth-context";
 import { customerClient } from "@/lib/customer-client";
@@ -128,22 +127,28 @@ export default function CustomerOrdersPage() {
             Paid
           </span>
         );
+      case "confirmed":
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200">
+            Confirmed
+          </span>
+        );
       case "pending_payment":
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
             Payment Pending
           </span>
         );
-      case "packed":
-        return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
-            Packed
-          </span>
-        );
       case "processing":
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
             Processing
+          </span>
+        );
+      case "packed":
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+            Packed
           </span>
         );
       case "shipped":
@@ -224,7 +229,7 @@ export default function CustomerOrdersPage() {
               My Orders ({totalCount})
             </h1>
             <p className="text-xs text-neutral-600">
-              Review your purchase history, item summaries, and carrier tracking updates[cite: 19].
+              Review your purchase history, item summaries, and carrier tracking updates[cite: 6].
             </p>
           </div>
 
@@ -290,7 +295,7 @@ export default function CustomerOrdersPage() {
               No Orders Found
             </h2>
             <p className="text-xs text-neutral-500 leading-relaxed">
-              You haven&apos;t placed any orders yet. Visit our shop catalog to explore our products[cite: 19].
+              You haven&apos;t placed any orders yet. Visit our shop catalog to explore our products[cite: 6].
             </p>
             <Link
               href="/shop"
@@ -442,7 +447,7 @@ export default function CustomerOrdersPage() {
             </span>
             <span>
               All probiotic orders are shipped under strict cold-storage
-              protocols to protect live cultures until they arrive at your door[cite: 19].
+              protocols to protect live cultures until they arrive at your door[cite: 6].
             </span>
           </div>
         </div>

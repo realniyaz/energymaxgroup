@@ -12,10 +12,6 @@ import {
   AlertCircle,
   Eye,
   RefreshCw,
-  ShoppingBag,
-  Clock,
-  CheckCircle2,
-  Truck,
 } from "lucide-react";
 import {
   getAdminOrders,
@@ -26,6 +22,8 @@ const STATUS_FILTERS = [
   { label: "All Statuses", value: "" },
   { label: "Pending Payment", value: "pending_payment" },
   { label: "Paid", value: "paid" },
+  { label: "Confirmed", value: "confirmed" },
+  { label: "Processing", value: "processing" },
   { label: "Packed", value: "packed" },
   { label: "Shipped", value: "shipped" },
   { label: "Out For Delivery", value: "out_for_delivery" },
@@ -54,12 +52,14 @@ export default function AdminOrdersPage() {
         status: status || undefined,
         search: search.trim() || undefined,
       });
-      setOrders(data.items);
-      setTotalPages(data.total_pages);
-      setTotalOrders(data.total);
+      setOrders(data.items || []);
+      setTotalPages(data.total_pages || 1);
+      setTotalOrders(data.total || 0);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : "Failed to load orders.");
+      setError(
+        typeof detail === "string" ? detail : "Failed to load orders."
+      );
     } finally {
       setLoading(false);
     }
@@ -76,11 +76,15 @@ export default function AdminOrdersPage() {
   };
 
   const getStatusBadge = (orderStatus: string) => {
-    switch (orderStatus.toLowerCase()) {
+    switch ((orderStatus || "").toLowerCase()) {
       case "paid":
         return "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40";
+      case "confirmed":
+        return "bg-teal-50 text-teal-700 border border-teal-200";
       case "pending_payment":
         return "bg-amber-100 text-amber-800 border border-amber-200";
+      case "processing":
+        return "bg-purple-50 text-purple-700 border border-purple-200";
       case "packed":
         return "bg-purple-100 text-purple-800 border border-purple-200";
       case "shipped":
@@ -108,7 +112,7 @@ export default function AdminOrdersPage() {
             Customer Orders ({totalOrders})
           </h1>
           <p className="text-xs text-neutral-500 pt-0.5">
-            Monitor incoming formulation orders, payments, and dispatch progress.
+            Monitor incoming orders, customer payments, and carrier dispatch progress[cite: 6].
           </p>
         </div>
 
@@ -120,7 +124,7 @@ export default function AdminOrdersPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search order #, patron..."
+              placeholder="Search order #, customer name..."
               className="bg-white border border-[#2D5A1E]/15 rounded-xl pl-9 pr-3 py-2 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F] w-56 font-mono"
             />
           </form>
@@ -172,8 +176,12 @@ export default function AdminOrdersPage() {
             <div className="w-12 h-12 rounded-2xl bg-[#FAFAF7] border border-neutral-200 flex items-center justify-center mx-auto text-[#2D5A1E]">
               <Package className="w-6 h-6 text-[#639E1F]" />
             </div>
-            <p className="text-sm font-serif font-bold text-[#172B15]">No orders found matching the filter.</p>
-            <p className="text-xs text-neutral-400">Try adjusting your status filter or clearing your search query.</p>
+            <p className="text-sm font-serif font-bold text-[#172B15]">
+              No orders found matching the filter[cite: 6].
+            </p>
+            <p className="text-xs text-neutral-400">
+              Try adjusting your status filter or clearing your search query[cite: 6].
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -190,12 +198,17 @@ export default function AdminOrdersPage() {
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {orders.map((ord) => (
-                  <tr key={ord.public_id} className="hover:bg-[#FAFAF7]/60 transition-colors">
+                  <tr
+                    key={ord.public_id}
+                    className="hover:bg-[#FAFAF7]/60 transition-colors"
+                  >
                     <td className="px-6 py-4 font-mono font-bold text-[#172B15]">
                       {ord.order_number}
                     </td>
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-[#172B15]">{ord.customer_name}</p>
+                      <p className="font-semibold text-[#172B15]">
+                        {ord.customer_name}
+                      </p>
                       <p className="text-[11px] text-neutral-400 font-mono">
                         {ord.customer_phone || ord.customer_email || "—"}
                       </p>
@@ -208,12 +221,19 @@ export default function AdminOrdersPage() {
                       })}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getStatusBadge(ord.status)}`}>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getStatusBadge(
+                          ord.status
+                        )}`}
+                      >
                         {ord.status.replace("_", " ")}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-serif font-bold text-[#172B15]">
-                      ₹{Number(ord.total_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      ₹
+                      {Number(ord.total_amount).toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <Link
@@ -235,7 +255,7 @@ export default function AdminOrdersPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-100 text-xs">
             <span className="text-neutral-500">
-              Page {page} of {totalPages} ({totalOrders} orders)
+              Page {page} of {totalPages} ({totalOrders} orders)[cite: 6]
             </span>
             <div className="flex items-center space-x-2">
               <button

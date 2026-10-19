@@ -209,15 +209,17 @@ export default function OrderDetailsAndTrackingPage({
       : null);
 
   const getStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch ((status || "").toLowerCase()) {
       case "paid":
         return "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40";
+      case "confirmed":
+        return "bg-teal-50 text-teal-700 border border-teal-200";
       case "pending_payment":
         return "bg-amber-100 text-amber-800 border border-amber-200";
-      case "packed":
-        return "bg-purple-100 text-purple-800 border border-purple-200";
       case "processing":
         return "bg-purple-50 text-purple-700 border border-purple-200";
+      case "packed":
+        return "bg-purple-100 text-purple-800 border border-purple-200";
       case "shipped":
         return "bg-blue-100 text-blue-800 border border-blue-200";
       case "out_for_delivery":
@@ -467,7 +469,7 @@ export default function OrderDetailsAndTrackingPage({
               Temperature-Controlled Cold-Chain Shipping
             </span>
             <span>
-              All probiotic orders are shipped under strict cold-storage protocols to protect live cultures until they arrive at your door[cite: 11, 12].
+              All probiotic orders are shipped under strict cold-storage protocols to protect live cultures until they arrive at your door[cite: 7].
             </span>
           </div>
         </div>

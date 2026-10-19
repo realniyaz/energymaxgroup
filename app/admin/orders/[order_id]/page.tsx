@@ -20,7 +20,6 @@ import {
   Phone,
   Mail,
   User,
-  Clock,
   History,
 } from "lucide-react";
 import {
@@ -38,6 +37,7 @@ import {
 const ALLOWED_STATUSES = [
   "pending_payment",
   "paid",
+  "confirmed",
   "processing",
   "packed",
   "shipped",
@@ -99,7 +99,7 @@ export default function AdminOrderDetailPage({
     fetchOrder();
   }, [orderId]);
 
-  // Handle standard lifecycle transition
+  // Handle manual lifecycle transition
   const handleStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStatus) return;
@@ -274,6 +274,8 @@ export default function AdminOrderDetailPage({
     switch (status.toLowerCase()) {
       case "paid":
         return "bg-[#8CC63F]/20 text-[#2D5A1E] border border-[#8CC63F]/40";
+      case "confirmed":
+        return "bg-teal-50 text-teal-700 border border-teal-200";
       case "pending_payment":
         return "bg-amber-100 text-amber-800 border border-amber-200";
       case "processing":
@@ -471,7 +473,7 @@ export default function AdminOrderDetailPage({
             </div>
           </div>
 
-          {/* Status Progression History (if present) */}
+          {/* Transition Audit Trail */}
           {order.status_history && order.status_history.length > 0 && (
             <div className="bg-white rounded-3xl p-6 border border-[#2D5A1E]/15 shadow-xs space-y-3">
               <div className="flex items-center space-x-2 text-neutral-700 border-b border-neutral-100 pb-2">
@@ -511,7 +513,7 @@ export default function AdminOrderDetailPage({
           )}
         </div>
 
-        {/* RIGHT COLUMN: Shiprocket Fulfillment Desk & Lifecycle Transition */}
+        {/* RIGHT COLUMN: Shiprocket Logistics Desk & Status Machine */}
         <div className="lg:col-span-5 space-y-6">
           {/* Shiprocket Fulfillment Card */}
           <div className="bg-white rounded-3xl p-6 border border-[#2D5A1E]/15 shadow-xs space-y-5">
@@ -741,7 +743,7 @@ export default function AdminOrderDetailPage({
             )}
           </div>
 
-          {/* Manual Lifecycle State Machine Card */}
+          {/* Manual Order Transition Card */}
           <div className="bg-white rounded-3xl p-6 border border-[#2D5A1E]/15 shadow-xs space-y-4">
             <h2 className="text-base font-serif font-bold text-[#172B15]">
               Manual Order Transition
@@ -773,7 +775,7 @@ export default function AdminOrderDetailPage({
                   rows={2}
                   value={statusNote}
                   onChange={(e) => setStatusNote(e.target.value)}
-                  placeholder="e.g. Packed in sterile nitrogen-insulated box..."
+                  placeholder="e.g. Order verified and formulation approved..."
                   className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-3 py-1.5 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
                 />
               </div>
