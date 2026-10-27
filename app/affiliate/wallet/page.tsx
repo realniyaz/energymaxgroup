@@ -411,7 +411,7 @@ export default function AffiliateWalletPage() {
                 Commission Ledger
               </h3>
               <Link
-                href="/affiliate/commissions"
+                href="/affiliate/commission"
                 className="text-[10px] text-[#639E1F] font-bold uppercase tracking-wider hover:underline"
               >
                 View Full Ledger ({commissions.length})
