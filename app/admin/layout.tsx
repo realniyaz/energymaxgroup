@@ -32,7 +32,10 @@ import {
   Bell,
   TagIcon,
   LucideGitGraph,
-  Users2
+  Users2,
+  UserCheck2Icon,
+  ReceiptIcon,
+  PercentIcon
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
 import { 
@@ -67,6 +70,8 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
   // Manage open state for collapsible sub-menus
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     "/admin/staff": pathname.startsWith("/admin/staff"),
+    "/admin/inventory": pathname.startsWith("/admin/inventory"),
+    "/admin/affiliates": pathname.startsWith("/admin/affiliates"),
   });
 
   const isLoginPage = pathname === "/admin/login";
@@ -75,6 +80,12 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
   useEffect(() => {
     if (pathname.startsWith("/admin/staff")) {
       setOpenMenus((prev) => ({ ...prev, "/admin/staff": true }));
+    }
+    if (pathname.startsWith("/admin/inventory")) {
+      setOpenMenus((prev) => ({ ...prev, "/admin/inventory": true }));
+    }
+    if (pathname.startsWith("/admin/affiliates")) {
+      setOpenMenus((prev) => ({ ...prev, "/admin/affiliates": true }));
     }
   }, [pathname]);
 
@@ -146,7 +157,17 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
       ]
     },
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
-    { href: "/admin/affiliates", label: "Affiliates", icon: Users2 },
+    { 
+      href: "/admin/affiliates", 
+      label: "Affiliates & Partners", 
+      icon: Users2,
+      children: [
+        { href: "/admin/affiliates/applications", label: "Applications Desk", icon: UserCheck2Icon },
+        { href: "/admin/affiliates", label: "Partner Directory", icon: Users },
+        { href: "/admin/affiliates/settlements", label: "Payout Settlements", icon: ReceiptIcon },
+        { href: "/admin/affiliates/policies", label: "Commission Policies", icon: PercentIcon },
+      ]
+    },
     { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
     { href: "/admin/coupons", label: "Coupons", icon: TagIcon },
     { href: "/admin/analytics", label: "Analytics", icon: LucideGitGraph },
