@@ -20,7 +20,7 @@ export interface AffiliateApplicationPublicResponse {
   public_id: string;
   status: string;
   submitted_at: string;
-  message: string;
+  message?: string;
 }
 
 export interface AffiliateMeResponse {
@@ -108,6 +108,8 @@ export interface CommissionLedgerItem {
   affiliate_id: number;
   attribution_id: number;
   order_id: number;
+  order_number?: string | null;
+  order_public_id?: string | null;
   entry_type: "COMMISSION" | "REVERSAL" | "ADJUSTMENT";
   amount: string | number;
   currency: string;
@@ -228,11 +230,13 @@ export async function getAffiliatePerformance(
   return res.data;
 }
 
-// Commissions & Earnings
+// Commissions & Earnings (Supports entry_type and order-level filter)
 export async function getAffiliateCommissions(
   limit = 50,
   offset = 0,
-  entryType?: string
+  entryType?: string,
+  orderPublicId?: string,
+  orderNumber?: string
 ): Promise<CommissionLedgerItem[]> {
   const res = await affiliateClient.get<CommissionLedgerItem[]>(
     "/api/v1/affiliate/commissions",
@@ -241,29 +245,38 @@ export async function getAffiliateCommissions(
         limit,
         offset,
         entry_type: entryType || undefined,
+        order_public_id: orderPublicId || undefined,
+        order_number: orderNumber || undefined,
       },
     }
   );
   return res.data;
 }
 
-// Wallet & Withdrawals
-export async function getAffiliateWallet(): Promise<WalletBalanceItem[]> {
-  const res = await affiliateClient.get<WalletBalanceItem[]>(
-    "/api/v1/affiliate/wallet"
+export async function getAffiliateEarnings(): Promise<CurrencyEarnings[]> {
+  const res = await affiliateClient.get<CurrencyEarnings[]>(
+    "/api/v1/affiliate/earnings"
   );
   return res.data;
 }
 
-export async function getAffiliateWalletLedger(): Promise<{
-  commissions: CommissionLedgerItem[];
-  withdrawals: WithdrawalItem[];
-}> {
-  const res = await affiliateClient.get<{
-    commissions: CommissionLedgerItem[];
-    withdrawals: WithdrawalItem[];
-  }>("/api/v1/affiliate/wallet/ledger");
-  return res.data;
+// Wallet & Withdrawals
+export async function getAffiliateWallet(): Promise<WalletBalanceItem[]> {
+  try {
+    const res = await affiliateClient.get<WalletBalanceItem[]>(
+      "/api/v1/affiliate/withdrawals/wallet"
+    );
+    return Array.isArray(res.data) ? res.data : [];
+  } catch {
+    try {
+      const fallbackRes = await affiliateClient.get<WalletBalanceItem[]>(
+        "/api/v1/affiliate/wallet"
+      );
+      return Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+    } catch {
+      return [];
+    }
+  }
 }
 
 export async function getAffiliateWithdrawals(

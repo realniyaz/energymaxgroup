@@ -1,154 +1,164 @@
-// app/admin/affiliates/policies/page.tsx
+// app/admin/affiliates/applications/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Percent,
-  Plus,
+  getAdminApplications,
+  approveApplication,
+  rejectApplication,
+  AdminAffiliateApplication,
+} from "@/lib/services/adminAffiliateService";
+import {
+  CheckCircle2,
+  Clock,
   Loader2,
   AlertCircle,
-  CheckCircle2,
+  ExternalLink,
+  Users,
+  Search,
   ArrowLeft,
+  Receipt,
+  Percent,
+  RefreshCw,
+  XCircle,
 } from "lucide-react";
-import {
-  getCommissionPolicies,
-  createCommissionPolicy,
-  deactivateCommissionPolicy,
-  AdminCommissionPolicy,
-} from "@/lib/services/adminAffiliateService";
 
-export default function AdminAffiliatePoliciesPage() {
-  const [policies, setPolicies] = useState<AdminCommissionPolicy[]>([]);
+export default function AdminAffiliateApplicationsPage() {
+  const [applications, setApplications] = useState<AdminAffiliateApplication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeOnly, setActiveOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [search, setSearch] = useState("");
 
-  // Form states
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [rateValue, setRateValue] = useState<string>("10.0000");
-  const [affiliatePublicId, setAffiliatePublicId] = useState<string>("");
-  const [submitting, setSubmitting] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<AdminAffiliateApplication | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Helper to format FastAPI detail safely
-  const formatApiError = (err: any): string => {
-    const detail = err?.response?.data?.detail;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((item: any) => {
-          const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "Field";
-          return `${field}: ${item.msg || "Invalid value"}`;
-        })
-        .join(" | ");
-    }
-    return err?.message || "An unexpected error occurred.";
-  };
-
-  const loadPolicies = async () => {
+  const loadApplications = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getCommissionPolicies(undefined, activeOnly);
-      setPolicies(data || []);
+      const filter = statusFilter === "all" ? undefined : statusFilter;
+      const data = await getAdminApplications(filter);
+      setApplications(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      setError(formatApiError(err));
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Failed to load partner applications.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
-    loadPolicies();
-  }, [activeOnly]);
+    loadApplications();
+  }, [loadApplications]);
 
-  const handleCreatePolicy = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+  const handleApprove = async (app: AdminAffiliateApplication) => {
+    if (!confirm(`Approve affiliate application for ${app.full_name}?`)) return;
+
+    setActionLoadingId(app.public_id);
     setError(null);
     setSuccess(null);
 
-    const parsedRate = parseFloat(rateValue);
-    if (isNaN(parsedRate) || parsedRate <= 0 || parsedRate > 100) {
-      setError("Please specify a valid commission rate percentage between 0.0001% and 100%.");
-      setSubmitting(false);
-      return;
-    }
-
     try {
-      // Must be an explicit ISO-8601 string with UTC timezone (Z)
-      const nowIso = new Date().toISOString();
-      const cleanAffiliateId = affiliatePublicId.trim();
-
-      await createCommissionPolicy({
-        commission_rate: parsedRate,
-        affiliate_public_id: cleanAffiliateId.length > 0 ? cleanAffiliateId : null,
-        effective_from: nowIso,
-        effective_until: null,
-      });
-
-      setSuccess("Commission policy configured and activated!");
-      setIsModalOpen(false);
-      setRateValue("10.0000");
-      setAffiliatePublicId("");
-      await loadPolicies();
+      await approveApplication(app.public_id);
+      setSuccess(`Application for ${app.full_name} approved! Activation link dispatched.`);
+      await loadApplications();
     } catch (err: any) {
-      setError(formatApiError(err));
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Failed to approve application.");
     } finally {
-      setSubmitting(false);
+      setActionLoadingId(null);
     }
   };
 
-  const handleDeactivate = async (policy: AdminCommissionPolicy) => {
-    if (!confirm(`Deactivate policy #${policy.public_id} (${policy.commission_rate}%)?`)) return;
+  const handleReject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedApp) return;
+
+    if (rejectReason.trim().length < 5) {
+      alert("Please provide a rejection note of at least 5 characters.");
+      return;
+    }
+
+    setActionLoadingId(selectedApp.public_id);
+    setError(null);
+    setSuccess(null);
 
     try {
-      setError(null);
-      await deactivateCommissionPolicy(policy.public_id);
-      setSuccess("Policy successfully deactivated.");
-      await loadPolicies();
+      await rejectApplication(selectedApp.public_id, rejectReason.trim());
+      setSuccess(`Application for ${selectedApp.full_name} rejected.`);
+      setSelectedApp(null);
+      setRejectReason("");
+      await loadApplications();
     } catch (err: any) {
-      setError(formatApiError(err));
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Failed to reject application.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const filteredApplications = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return applications.filter((a) => {
+      if (!q) return true;
+      const name = (a.full_name || "").toLowerCase();
+      const email = (a.email || "").toLowerCase();
+      const channels = (a.promotion_channels || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || channels.includes(q);
+    });
+  }, [applications, search]);
+
+  const getStatusBadge = (status: string) => {
+    switch ((status || "").toLowerCase()) {
+      case "approved":
+        return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+      case "rejected":
+        return "bg-red-100 text-red-800 border border-red-200";
+      case "pending":
+      default:
+        return "bg-amber-100 text-amber-800 border border-amber-200";
     }
   };
 
   return (
-    <div className="p-6 sm:p-10 space-y-8 font-sans max-w-7xl mx-auto">
+    <div className="space-y-6 font-sans max-w-7xl mx-auto pb-16">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
-            Rate Schedules & Governance
+            Admissions Desk
           </span>
           <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#172B15] tracking-tight">
-            Commission Policies Desk
+            Partner <span className="italic font-light text-[#639E1F]">Applications</span>
           </h1>
           <p className="text-xs text-neutral-500 mt-1">
-            Configure global baseline rates and partner-specific override percentages.
+            Review candidate audience profiles, verify promotion channels, and issue approvals.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/admin/affiliates"
             className="px-3.5 py-2 rounded-xl bg-white border border-[#2D5A1E]/20 text-xs font-bold uppercase tracking-wider text-[#172B15] hover:bg-[#FAFAF7] transition-all flex items-center space-x-1.5 shadow-xs"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Affiliate Desk</span>
+            <span>Partner Directory</span>
           </Link>
-
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-[#2D5A1E] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#234717] transition-all flex items-center space-x-1.5 shadow-xs cursor-pointer"
+            onClick={loadApplications}
+            disabled={loading}
+            className="p-2 rounded-xl bg-white border border-[#2D5A1E]/20 text-[#2D5A1E] hover:bg-[#F2F8ED] transition-all shadow-xs cursor-pointer disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
-            <span>New Commission Policy</span>
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
 
-      {/* Notifications */}
       {error && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -163,110 +173,134 @@ export default function AdminAffiliatePoliciesPage() {
         </div>
       )}
 
-      {/* Toggle View */}
-      <div className="flex items-center space-x-3">
-        <button
-          onClick={() => setActiveOnly(false)}
-          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-            !activeOnly
-              ? "bg-[#2D5A1E] text-white shadow-xs"
-              : "bg-white border border-neutral-200 text-neutral-600 hover:border-neutral-300"
-          }`}
-        >
-          All Policies
-        </button>
+      {/* Filter and Search Ribbon */}
+      <div className="bg-white rounded-2xl border border-[#2D5A1E]/15 p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="relative w-full md:max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search candidates by name, email, channels..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] placeholder-neutral-400 focus:outline-none focus:border-[#639E1F]"
+          />
+        </div>
 
-        <button
-          onClick={() => setActiveOnly(true)}
-          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-            activeOnly
-              ? "bg-[#2D5A1E] text-white shadow-xs"
-              : "bg-white border border-neutral-200 text-neutral-600 hover:border-neutral-300"
-          }`}
-        >
-          Active Policies Only
-        </button>
+        <div className="flex items-center space-x-2 w-full md:w-auto overflow-x-auto">
+          {(["pending", "approved", "rejected", "all"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setStatusFilter(tab)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                statusFilter === tab
+                  ? "bg-[#2D5A1E] text-white shadow-xs"
+                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 overflow-hidden shadow-xs">
         {loading ? (
-          <div className="p-16 flex flex-col items-center justify-center space-y-3">
+          <div className="p-20 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
-            <span className="text-xs text-neutral-400">Loading commission rate policies...</span>
+            <span className="text-xs uppercase tracking-widest text-neutral-400 font-bold">
+              Fetching Applications...
+            </span>
           </div>
-        ) : policies.length === 0 ? (
+        ) : filteredApplications.length === 0 ? (
           <div className="p-16 text-center text-xs text-neutral-400 space-y-2">
-            <Percent className="w-8 h-8 text-neutral-300 mx-auto" />
-            <p>No policies found. Click "New Commission Policy" to configure a rate schedule.</p>
+            <Users className="w-8 h-8 text-neutral-300 mx-auto" />
+            <p>No applications match the current filter.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs text-[#172B15]">
               <thead className="bg-[#FAFAF7] border-b border-neutral-200 text-neutral-500 uppercase tracking-widest text-[9px]">
                 <tr>
-                  <th className="p-4">Scope / Assignment</th>
-                  <th className="p-4">Commission Rate</th>
-                  <th className="p-4">Effective Window</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th className="px-6 py-4">Applicant</th>
+                  <th className="px-6 py-4">Channels & Audience</th>
+                  <th className="px-6 py-4">Website</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4">Submitted</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {policies.map((p) => (
-                  <tr key={p.public_id} className="hover:bg-neutral-50/50">
-                    <td className="p-4">
-                      {p.affiliate_id ? (
-                        <div className="font-bold text-[#172B15] flex items-center space-x-1.5">
-                          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-mono border border-blue-200">
-                            Partner Override
-                          </span>
-                          <span>Affiliate ID #{p.affiliate_id}</span>
-                        </div>
-                      ) : (
-                        <div className="font-bold text-[#2D5A1E] flex items-center space-x-1.5">
-                          <span className="px-2 py-0.5 rounded-full bg-[#8CC63F]/20 text-[#2D5A1E] text-[10px] font-bold border border-[#8CC63F]/30 uppercase">
-                            Global Default
-                          </span>
-                          <span>All Active Partners</span>
-                        </div>
+                {filteredApplications.map((app) => (
+                  <tr key={app.public_id} className="hover:bg-[#FAFAF7]/70">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-[#172B15]">{app.full_name}</div>
+                      <div className="text-[11px] text-neutral-400 font-mono">{app.email}</div>
+                      {app.phone && <div className="text-[10px] text-neutral-400 font-mono">{app.phone}</div>}
+                    </td>
+
+                    <td className="px-6 py-4 max-w-sm">
+                      <div className="font-semibold text-[#2D5A1E]">{app.promotion_channels}</div>
+                      {app.audience_description && (
+                        <p className="text-[11px] text-neutral-500 line-clamp-2 mt-0.5">
+                          {app.audience_description}
+                        </p>
                       )}
                     </td>
 
-                    <td className="p-4 font-mono font-bold text-sm text-[#2D5A1E]">
-                      {p.commission_rate}%
-                    </td>
-
-                    <td className="p-4 text-[11px] text-neutral-500 font-mono">
-                      <div>From: {new Date(p.effective_from).toLocaleDateString()}</div>
-                      <div>
-                        Until:{" "}
-                        {p.effective_until
-                          ? new Date(p.effective_until).toLocaleDateString()
-                          : "Indefinite"}
-                      </div>
-                    </td>
-
-                    <td className="p-4">
-                      <span
-                        className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded-full ${
-                          p.is_active
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-neutral-100 text-neutral-600"
-                        }`}
-                      >
-                        {p.is_active ? "ACTIVE" : "INACTIVE"}
-                      </span>
-                    </td>
-
-                    <td className="p-4 text-right">
-                      {p.is_active && (
-                        <button
-                          onClick={() => handleDeactivate(p)}
-                          className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-xs"
+                    <td className="px-6 py-4">
+                      {app.website_url ? (
+                        <a
+                          href={app.website_url.startsWith("http") ? app.website_url : `https://${app.website_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1 text-[11px] text-[#2D5A1E] hover:underline"
                         >
-                          Deactivate
-                        </button>
+                          <span className="max-w-[130px] truncate block">{app.website_url}</span>
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-neutral-400">—</span>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getStatusBadge(
+                          app.status
+                        )}`}
+                      >
+                        {app.status}
+                      </span>
+                      {app.decision_reason && (
+                        <p className="text-[10px] text-red-600 mt-1 max-w-[140px] truncate mx-auto">
+                          {app.decision_reason}
+                        </p>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4 font-mono text-[11px] text-neutral-500">
+                      {new Date(app.submitted_at).toLocaleDateString()}
+                    </td>
+
+                    <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
+                      {app.status.toLowerCase() === "pending" && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(app)}
+                            disabled={actionLoadingId === app.public_id}
+                            className="px-3.5 py-1.5 rounded-xl bg-[#2D5A1E] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#1e3c14] disabled:opacity-50 cursor-pointer shadow-xs"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => setSelectedApp(app)}
+                            disabled={actionLoadingId === app.public_id}
+                            className="px-3.5 py-1.5 rounded-xl bg-red-100 text-red-700 font-bold text-[10px] uppercase tracking-wider hover:bg-red-200 disabled:opacity-50 cursor-pointer shadow-xs"
+                          >
+                            Reject
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -277,61 +311,34 @@ export default function AdminAffiliatePoliciesPage() {
         )}
       </div>
 
-      {/* Creation Modal */}
-      {isModalOpen && (
+      {/* Reject Modal */}
+      {selectedApp && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-5 shadow-2xl">
-            <div>
-              <h3 className="text-base font-bold text-[#172B15] uppercase tracking-wider">
-                Create Commission Policy
-              </h3>
-              <p className="text-xs text-neutral-500 mt-1">
-                Configure payout percentage. Leave Affiliate Public ID blank to set a global store baseline rate[cite: 19].
-              </p>
-            </div>
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-4 shadow-2xl">
+            <h3 className="font-bold text-sm uppercase tracking-wider text-[#172B15]">
+              Reject Application: {selectedApp.full_name}
+            </h3>
+            <p className="text-xs text-neutral-500">
+              Provide an administrative reason explaining why this application was not accepted.
+            </p>
 
-            <form onSubmit={handleCreatePolicy} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 block mb-1">
-                  Commission Percentage (%) *
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.0001"
-                    min="0.0001"
-                    max="100"
-                    required
-                    value={rateValue}
-                    onChange={(e) => setRateValue(e.target.value)}
-                    placeholder="e.g. 10.0000"
-                    className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none focus:border-[#639E1F]"
-                  />
-                  <span className="absolute right-3.5 top-2.5 text-xs font-mono text-neutral-400">
-                    %
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 block mb-1">
-                  Affiliate Public ID (Optional Override)
-                </label>
-                <input
-                  type="text"
-                  value={affiliatePublicId}
-                  onChange={(e) => setAffiliatePublicId(e.target.value)}
-                  placeholder="Leave empty for global store default"
-                  className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none focus:border-[#639E1F]"
-                />
-              </div>
+            <form onSubmit={handleReject} className="space-y-4">
+              <textarea
+                rows={3}
+                required
+                minLength={5}
+                placeholder="Audit note (e.g. Channel does not meet guidelines)..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl p-3 text-xs text-[#172B15] focus:outline-none focus:border-[#639E1F]"
+              />
 
               <div className="flex space-x-2 justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsModalOpen(false);
-                    setError(null);
+                    setSelectedApp(null);
+                    setRejectReason("");
                   }}
                   className="px-4 py-2 border rounded-xl text-xs text-neutral-600 hover:bg-neutral-50 cursor-pointer"
                 >
@@ -339,10 +346,10 @@ export default function AdminAffiliatePoliciesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 bg-[#2D5A1E] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#234717] disabled:opacity-50 cursor-pointer shadow-xs"
+                  disabled={actionLoadingId === selectedApp.public_id || rejectReason.trim().length < 5}
+                  className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-red-700 disabled:opacity-50 cursor-pointer shadow-xs"
                 >
-                  {submitting ? "Creating..." : "Save Policy"}
+                  Confirm Rejection
                 </button>
               </div>
             </form>

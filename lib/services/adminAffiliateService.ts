@@ -3,14 +3,17 @@ import { apiClient } from "@/lib/api-client";
 
 /**
  * =========================================================
- * SCHEMAS & INTERFACES (Aligned with Backend Pydantic Schemas)
+ * SCHEMAS & INTERFACES (Aligned with Backend Models & Schemas)
  * =========================================================
  */
 
 export type AffiliateApplicationStatus = "pending" | "approved" | "rejected";
 export type AffiliateStatus = "active" | "inactive" | "suspended";
+export type WithdrawalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PAID";
+export type LedgerEntryType = "COMMISSION" | "REVERSAL" | "ADJUSTMENT";
 
 export interface AdminAffiliateApplication {
+  id?: number;
   public_id: string;
   full_name: string;
   email: string;
@@ -26,6 +29,7 @@ export interface AdminAffiliateApplication {
 }
 
 export interface AdminAffiliateItem {
+  id?: number;
   public_id: string;
   full_name: string;
   email: string;
@@ -33,6 +37,8 @@ export interface AdminAffiliateItem {
   public_code: string;
   status: string;
   approved_at: string;
+  activated_at?: string | null;
+  last_login_at?: string | null;
   created_at: string;
 }
 
@@ -60,7 +66,9 @@ export interface CommissionLedgerItem {
   affiliate_id: number;
   attribution_id: number;
   order_id: number;
-  entry_type: "COMMISSION" | "REVERSAL" | "ADJUSTMENT";
+  order_number?: string | null;
+  order_public_id?: string | null;
+  entry_type: LedgerEntryType;
   amount: number | string;
   currency: string;
   base_amount: number | string;
@@ -76,7 +84,7 @@ export interface AdminWithdrawalItem {
   affiliate_id: number;
   amount: number | string;
   currency: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PAID";
+  status: WithdrawalStatus;
   payout_reference?: string | null;
   rejection_reason?: string | null;
   requested_at: string;
@@ -242,18 +250,34 @@ export async function getAdminCommissions(
   return Array.isArray(res.data) ? res.data : [];
 }
 
+export async function getAdminCommissionById(
+  publicId: string
+): Promise<CommissionLedgerItem> {
+  const res = await apiClient.get<CommissionLedgerItem>(
+    `/api/v1/admin/affiliates/commissions/${publicId}`
+  );
+  return res.data;
+}
+
 export async function adjustCommission(
   publicId: string,
   payload: {
     amount: number;
     currency: string;
     description: string;
-    idempotency_key: string;
+    idempotency_key?: string;
   }
 ): Promise<CommissionLedgerItem> {
+  const idempotencyKey =
+    payload.idempotency_key ||
+    `adj_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
   const res = await apiClient.post<CommissionLedgerItem>(
     `/api/v1/admin/affiliates/commissions/${publicId}/adjust`,
-    payload
+    {
+      ...payload,
+      idempotency_key: idempotencyKey,
+    }
   );
   return res.data;
 }
@@ -262,12 +286,19 @@ export async function reverseCommission(
   publicId: string,
   payload: {
     reason: string;
-    idempotency_key: string;
+    idempotency_key?: string;
   }
 ): Promise<CommissionLedgerItem> {
+  const idempotencyKey =
+    payload.idempotency_key ||
+    `rev_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
   const res = await apiClient.post<CommissionLedgerItem>(
     `/api/v1/admin/affiliates/commissions/${publicId}/reverse`,
-    payload
+    {
+      ...payload,
+      idempotency_key: idempotencyKey,
+    }
   );
   return res.data;
 }

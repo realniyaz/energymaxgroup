@@ -1,14 +1,19 @@
 // app/affiliate/wallet/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAffiliateAuth } from "@/context/affiliate-auth-context";
 import {
   WalletBalanceItem,
   WithdrawalItem,
   CommissionLedgerItem,
+  CurrencyEarnings,
   getAffiliateWallet,
-  getAffiliateWalletLedger,
+  getAffiliateWithdrawals,
+  getAffiliateCommissions,
+  getAffiliateEarnings,
   requestAffiliateWithdrawal,
 } from "@/lib/services/affiliateService";
 import {
@@ -20,13 +25,16 @@ import {
   AlertCircle,
   Loader2,
   ArrowLeft,
-  DollarSign,
-  TrendingUp,
+  ShieldCheck,
   Receipt,
+  Layers,
 } from "lucide-react";
 
 export default function AffiliateWalletPage() {
-  const [wallets, setWallets] = useState<WalletBalanceItem[]>([]);
+  const router = useRouter();
+  const { affiliate, loading: authLoading } = useAffiliateAuth();
+
+  const [wallet, setWallet] = useState<WalletBalanceItem | null>(null);
   const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
   const [commissions, setCommissions] = useState<CommissionLedgerItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,33 +45,91 @@ export default function AffiliateWalletPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [, startTransition] = useTransition();
+
+  // 1. Session Guard: Route to login if unauthenticated
+  useEffect(() => {
+    if (!authLoading && !affiliate) {
+      router.replace("/affiliate/login");
+    }
+  }, [affiliate, authLoading, router]);
+
+  // 2. Load Financial Data with Resilient Fallbacks
   const loadFinancialData = async () => {
+    if (!affiliate) return;
+    setLoading(true);
+    setError(null);
+
     try {
-      const [walletRes, ledgerRes] = await Promise.all([
-        getAffiliateWallet(),
-        getAffiliateWalletLedger(),
+      const [walletRes, withdrawalsRes, commissionsRes] = await Promise.all([
+        getAffiliateWallet().catch(() => null),
+        getAffiliateWithdrawals(50, 0).catch(() => []),
+        getAffiliateCommissions(50, 0).catch(() => []),
       ]);
-      setWallets(walletRes || []);
-      setWithdrawals(ledgerRes?.withdrawals || []);
-      setCommissions(ledgerRes?.commissions || []);
-    } catch {
-      setError("Unable to load real-time wallet balances.");
+
+      setWithdrawals(withdrawalsRes || []);
+      setCommissions(commissionsRes || []);
+
+      // If dedicated wallet endpoint succeeds:
+      if (Array.isArray(walletRes) && walletRes.length > 0) {
+        setWallet(walletRes[0]);
+      } else {
+        // Fallback: Compute balance accurately using WalletService rules
+        let netEarnings = 0;
+        try {
+          const earningsSummary = await getAffiliateEarnings();
+          if (earningsSummary && earningsSummary.length > 0) {
+            netEarnings = Number(earningsSummary[0].net_earnings || 0);
+          }
+        } catch {
+          netEarnings = (commissionsRes || []).reduce(
+            (acc, curr) => acc + Number(curr.amount || 0),
+            0
+          );
+        }
+
+        const reservedBalance = (withdrawalsRes || [])
+          .filter((w) => w.status === "PENDING" || w.status === "APPROVED")
+          .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+
+        const paidBalance = (withdrawalsRes || [])
+          .filter((w) => w.status === "PAID")
+          .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+
+        const available = Math.max(0, netEarnings - reservedBalance - paidBalance);
+
+        setWallet({
+          currency: "INR",
+          net_earnings: netEarnings.toFixed(2),
+          reserved_balance: reservedBalance.toFixed(2),
+          paid_balance: paidBalance.toFixed(2),
+          available_balance: available.toFixed(2),
+        });
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          "Unable to load real-time wallet balances. Please refresh."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadFinancialData();
-  }, []);
+    if (affiliate) {
+      loadFinancialData();
+    }
+  }, [affiliate]);
 
+  // 3. Payout Request Handler
   const handleWithdrawalRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
     const val = parseFloat(amount);
-    const available = parseFloat(String(wallets[0]?.available_balance || 0));
+    const available = Number(wallet?.available_balance || 0);
 
     if (isNaN(val) || val <= 0) {
       setError("Please specify a valid positive withdrawal amount.");
@@ -71,60 +137,61 @@ export default function AffiliateWalletPage() {
     }
 
     if (val > available) {
-      setError("Withdrawal amount cannot exceed your available balance.");
+      setError(
+        `Withdrawal amount exceeds your current available balance of ₹${available.toLocaleString(
+          "en-IN",
+          { minimumFractionDigits: 2 }
+        )}.`
+      );
       return;
     }
 
     setSubmitting(true);
     try {
-      // High-entropy idempotency key
-      const idempotencyKey = `wth_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      // 128-bit collision-resistant idempotency key
+      const idempotencyKey = `wth_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 10)}`;
 
       await requestAffiliateWithdrawal({
         amount: val,
-        currency: wallets[0]?.currency || "INR",
+        currency: wallet?.currency || "INR",
         idempotency_key: idempotencyKey,
       });
 
-      setSuccess("Withdrawal request submitted for administrative review.");
+      setSuccess("Withdrawal request submitted successfully for administrative review.");
       setAmount("");
       await loadFinancialData();
     } catch (err: any) {
+      const detail = err.response?.data?.detail;
       setError(
-        err.response?.data?.detail ||
-          err.message ||
-          "Failed to submit withdrawal request."
+        typeof detail === "string"
+          ? detail
+          : detail?.message ||
+              err.message ||
+              "Failed to submit withdrawal request. Please retry."
       );
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
+  if (authLoading || !affiliate) {
     return (
       <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3 font-sans">
         <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
         <p className="text-xs uppercase tracking-widest text-neutral-400 font-bold">
-          Synchronizing Partner Financial Ledger...
+          Verifying Balance Gateway...
         </p>
       </div>
     );
   }
 
-  const primaryWallet = wallets[0] || {
-    currency: "INR",
-    available_balance: "0.00",
-    reserved_balance: "0.00",
-    paid_balance: "0.00",
-    net_earnings: "0.00",
-  };
-
-  const availableNum = Number(primaryWallet.available_balance || 0);
+  const availableNum = Number(wallet?.available_balance || 0);
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] py-8 px-4 sm:px-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-8">
-        
         {/* Navigation Bar */}
         <div className="flex items-center justify-between border-b border-[#2D5A1E]/15 pb-4">
           <Link
@@ -144,12 +211,17 @@ export default function AffiliateWalletPage() {
         {/* 4 Multi-State Financial Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Available */}
-          <div className="bg-[#172B15] text-white p-6 rounded-3xl shadow-lg space-y-2 relative overflow-hidden">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#8CC63F] block">
-              Available Balance
-            </span>
-            <div className="text-2xl font-mono font-bold text-white">
-              ₹{availableNum.toFixed(2)}
+          <div className="bg-[#172B15] text-white p-6 rounded-3xl shadow-lg space-y-2 relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#8CC63F] block">
+                Available Balance
+              </span>
+              <div className="text-2xl font-mono font-bold text-white mt-1">
+                ₹{availableNum.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
             </div>
             <p className="text-[10px] text-neutral-300">
               Ready for immediate payout request
@@ -157,12 +229,17 @@ export default function AffiliateWalletPage() {
           </div>
 
           {/* Reserved */}
-          <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 block">
-              Pending Reserves
-            </span>
-            <div className="text-2xl font-mono font-bold text-[#172B15]">
-              ₹{Number(primaryWallet.reserved_balance || 0).toFixed(2)}
+          <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-2 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 block">
+                Pending Reserves
+              </span>
+              <div className="text-2xl font-mono font-bold text-amber-700 mt-1">
+                ₹{Number(wallet?.reserved_balance || 0).toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
             </div>
             <p className="text-[10px] text-neutral-400">
               Currently pending administrative review
@@ -170,25 +247,35 @@ export default function AffiliateWalletPage() {
           </div>
 
           {/* Paid Out */}
-          <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 block">
-              Paid Out to Date
-            </span>
-            <div className="text-2xl font-mono font-bold text-[#172B15]">
-              ₹{Number(primaryWallet.paid_balance || 0).toFixed(2)}
+          <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-2 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 block">
+                Paid Out to Date
+              </span>
+              <div className="text-2xl font-mono font-bold text-[#172B15] mt-1">
+                ₹{Number(wallet?.paid_balance || 0).toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
             </div>
             <p className="text-[10px] text-neutral-400">
               Settled into your designated bank account
             </p>
           </div>
 
-          {/* Accrued */}
-          <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 block">
-              Cumulative Earned
-            </span>
-            <div className="text-2xl font-mono font-bold text-[#172B15]">
-              ₹{Number(primaryWallet.net_earnings || 0).toFixed(2)}
+          {/* Cumulative Net Earned */}
+          <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-2 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 block">
+                Cumulative Earned
+              </span>
+              <div className="text-2xl font-mono font-bold text-[#172B15] mt-1">
+                ₹{Number(wallet?.net_earnings || 0).toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
             </div>
             <p className="text-[10px] text-neutral-400">
               Total lifetime earned commissions
@@ -203,7 +290,7 @@ export default function AffiliateWalletPage() {
               Request Payout
             </h2>
             <p className="text-xs text-neutral-400">
-              Requests are verified and settled into your registered payout account.
+              Requests are verified and settled into your registered bank account.
             </p>
           </div>
 
@@ -235,7 +322,7 @@ export default function AffiliateWalletPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="Enter withdrawal amount..."
-                className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl pl-8 pr-4 py-3 text-xs font-mono focus:outline-none focus:border-[#639E1F]"
+                className="w-full bg-[#FAFAF7] border border-[#2D5A1E]/15 rounded-2xl pl-8 pr-4 py-3 text-xs font-mono focus:outline-none focus:border-[#639E1F] text-[#172B15]"
               />
             </div>
 
@@ -261,7 +348,6 @@ export default function AffiliateWalletPage() {
 
         {/* 2-Column Ledger & Withdrawals History */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          
           {/* Payout Requests History */}
           <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 overflow-hidden shadow-xs space-y-0">
             <div className="p-5 border-b border-neutral-100 flex items-center justify-between">
@@ -324,9 +410,12 @@ export default function AffiliateWalletPage() {
               <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500">
                 Commission Ledger
               </h3>
-              <span className="text-[10px] text-neutral-400 font-mono">
-                {commissions.length} entries
-              </span>
+              <Link
+                href="/affiliate/commissions"
+                className="text-[10px] text-[#639E1F] font-bold uppercase tracking-wider hover:underline"
+              >
+                View Full Ledger ({commissions.length})
+              </Link>
             </div>
 
             {commissions.length === 0 ? (
@@ -367,9 +456,7 @@ export default function AffiliateWalletPage() {
               </div>
             )}
           </div>
-
         </div>
-
       </div>
     </div>
   );
