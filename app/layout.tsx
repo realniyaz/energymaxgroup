@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { CustomerAuthProvider } from "@/context/customer-auth-context";
 import { CartProvider } from "@/context/cart-context";
 import { WishlistProvider } from "@/context/wishlist-context";
 import { CustomerNotificationProvider } from "@/context/customer-notification-context";
+import ReferralTracker from "./components/affiliate/ReferralTracker";
+
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://energymaxgroup.in"),
@@ -11,7 +14,8 @@ export const metadata: Metadata = {
     default: "EnergyMax Group | Global Wellness, Health & Sustainable Success",
     template: "%s | EnergyMax Group",
   },
-  description: "EnergyMax Group is an international health and wellness enterprise empowering individuals through advanced probiotic science, gut health ecology, and financial prosperity.",
+  description:
+    "EnergyMax Group is an international health and wellness enterprise empowering individuals through advanced probiotic science, gut health ecology, and financial prosperity.",
   keywords: [
     "EnergyMax",
     "EnergyMax Group",
@@ -35,7 +39,8 @@ export const metadata: Metadata = {
     url: "https://energymaxgroup.in",
     siteName: "EnergyMax Group",
     title: "EnergyMax Group | Empowering Global Wellness",
-    description: "Discover advanced probiotic solutions and sustainable lifestyle partnership opportunities with EnergyMax Group.",
+    description:
+      "Discover advanced probiotic solutions and sustainable lifestyle partnership opportunities with EnergyMax Group.",
     images: [
       {
         url: "/og-image.jpg",
@@ -48,7 +53,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "EnergyMax Group | Global Wellness",
-    description: "Empowering people to achieve personal health, happiness, and financial prosperity.",
+    description:
+      "Empowering people to achieve personal health, happiness, and financial prosperity.",
     images: ["/og-image.jpg"],
   },
   robots: {
@@ -62,9 +68,7 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  verification: {
-    // Add verification codes when available (e.g., Google Search Console)
-  },
+  verification: {},
 };
 
 export default function RootLayout({
@@ -75,14 +79,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-brand-ivory text-brand-charcoal antialiased selection:bg-brand-green selection:text-white">
+        {/* Invisible referral tracker with Suspense wrapper */}
+        <Suspense fallback={null}>
+          <ReferralTracker/>
+        </Suspense>
+
         <CustomerAuthProvider>
           <CartProvider>
             <WishlistProvider>
               <CustomerNotificationProvider>
-        {children}
-        </CustomerNotificationProvider>
-        </WishlistProvider>
-        </CartProvider>
+                {children}
+              </CustomerNotificationProvider>
+            </WishlistProvider>
+          </CartProvider>
         </CustomerAuthProvider>
       </body>
     </html>

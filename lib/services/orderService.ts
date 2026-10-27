@@ -7,6 +7,10 @@ import { customerClient } from "@/lib/customer-client";
  * =========================================================
  */
 
+export interface CreateOrderPayload {
+  tracking_token?: string | null;
+}
+
 export interface OrderItem {
   public_id: string;
   product_id?: number;
@@ -196,12 +200,15 @@ export async function getMyOrders(
 /**
  * POST /api/v1/shop/orders/from-checkout/{checkout_id}
  * Converts confirmed and locked checkout session into a finalized customer order.
+ * Optionally forwards affiliate referral tracking_token for conversion attribution.
  */
 export async function createOrderFromCheckout(
-  checkoutPublicId: string
+  checkoutPublicId: string,
+  payload?: CreateOrderPayload
 ): Promise<OrderResponse> {
   const res = await customerClient.post<OrderResponse>(
-    `/api/v1/shop/orders/from-checkout/${checkoutPublicId}`
+    `/api/v1/shop/orders/from-checkout/${checkoutPublicId}`,
+    payload || {}
   );
   return res.data;
 }
@@ -254,7 +261,7 @@ export async function trackOrderByNumber(
   orderNumber: string
 ): Promise<OrderTrackingResponse> {
   const res = await customerClient.get<OrderTrackingResponse>(
-    `/api/v1/shop/orders/track/${orderNumber}`
+    `/api/v1/shop/orders/track/${encodeURIComponent(orderNumber)}`
   );
   return res.data;
 }

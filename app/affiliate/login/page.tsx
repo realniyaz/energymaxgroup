@@ -82,7 +82,7 @@ export default function AffiliateLoginPage() {
             </label>
             <div className="relative">
               <Mail className="absolute left-4 top-3.5 w-4 h-4 text-neutral-400" />
-              <input
+              <input suppressHydrationWarning
                 type="email"
                 required
                 value={email}

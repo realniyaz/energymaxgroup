@@ -38,6 +38,7 @@ import {
 import { loadCashfreeSDK } from "@/lib/cashfree";
 import CheckoutCouponBox from "@/app/components/checkout/CheckoutCouponBox";
 import { CouponApplyResponse } from "@/lib/services/couponService";
+import { getStoredReferralData } from "@/lib/affiliate-tracking";
 
 const LABEL_ICONS: Record<string, React.ReactNode> = {
   Home: <Home className="w-4 h-4" />,
@@ -191,7 +192,7 @@ export default function CheckoutPage({
     });
   };
 
-  // 5. Confirm Checkout -> Order -> Cashfree SDK -> Verify Payment
+  // 5. Confirm Checkout -> Order with Tracking Token -> Cashfree SDK -> Verify Payment
   const handleConfirmAndPay = async () => {
     if (!selectedAddressPublicId) {
       setError("Please select a delivery address before confirming.");
@@ -207,7 +208,14 @@ export default function CheckoutPage({
       await confirmCheckout(checkoutId);
 
       setPaymentPhase("Generating order reservation...");
-      const order = await createOrderFromCheckout(checkoutId);
+
+      // Pull tracked referral data saved by ReferralTracker in Stage 1
+      const { trackingToken } = getStoredReferralData();
+
+      // Pass the tracking token to the backend for affiliate attribution
+      const order = await createOrderFromCheckout(checkoutId, {
+        tracking_token: trackingToken || undefined,
+      });
       createdOrderPublicId = order.public_id;
 
       // Sync cart in background non-blockingly
@@ -497,7 +505,7 @@ export default function CheckoutPage({
                 )}
 
                 <div className="flex items-center justify-between">
-                  <span>Cold-Chain Express Delivery</span>
+                  <span>Express Delivery</span>
                   <span className="text-[#639E1F] font-bold text-[10px] uppercase">Complimentary</span>
                 </div>
 

@@ -17,7 +17,7 @@ export default function CheckoutEntryPage() {
   const hasTriggeredRef = useRef<boolean>(false);
 
   useEffect(() => {
-    // 1. Wait only until customer authentication resolves
+    // 1. Wait until customer authentication resolves
     if (authLoading) return;
 
     // 2. Redirect guests to login immediately with return callback
@@ -34,14 +34,11 @@ export default function CheckoutEntryPage() {
 
     async function initializeCheckout() {
       try {
-        console.log("Initiating checkout session creation...");
         const checkout = await createCheckout();
-        console.log("Checkout created:", checkout);
 
         if (!isMounted) return;
 
         if (checkout?.public_id) {
-          // Direct client routing
           router.replace(`/checkout/${checkout.public_id}`);
         } else {
           throw new Error("No checkout session ID received from server.");
@@ -57,8 +54,6 @@ export default function CheckoutEntryPage() {
           typeof detail === "string"
             ? detail
             : detail?.[0]?.msg || err.message || "Unable to initiate checkout session.";
-
-        console.error("Checkout initiation error:", message);
 
         if (message.toLowerCase().includes("empty")) {
           setIsEmptyCart(true);
