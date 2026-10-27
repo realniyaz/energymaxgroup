@@ -5,21 +5,16 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Users,
-  FileText,
   CheckCircle2,
-  XCircle,
-  Mail,
   Send,
   RefreshCw,
   Search,
   ExternalLink,
   AlertCircle,
   Loader2,
-  ShieldCheck,
   Percent,
   Receipt,
   UserCheck,
-  Ban,
 } from "lucide-react";
 import {
   getAdminApplications,
@@ -27,26 +22,22 @@ import {
   rejectApplication,
   getAdminAffiliates,
   resendActivationLink,
-  updateAffiliateStatus,
   AdminAffiliateApplication,
   AdminAffiliateItem,
-  AffiliateApplicationStatus,
 } from "@/lib/services/adminAffiliateService";
 
 export default function AdminAffiliatesPage() {
   const [activeTab, setActiveTab] = useState<"affiliates" | "applications">("affiliates");
   const [loading, setLoading] = useState<boolean>(true);
-  const [actionLoadingId, setActionLoadingId] = useState<string | number | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Data states
   const [applications, setApplications] = useState<AdminAffiliateApplication[]>([]);
   const [affiliates, setAffiliates] = useState<AdminAffiliateItem[]>([]);
   const [search, setSearch] = useState("");
-  const [appStatusFilter, setAppStatusFilter] = useState<AffiliateApplicationStatus | "ALL">("PENDING");
+  const [appStatusFilter, setAppStatusFilter] = useState<string>("pending");
 
-  // Rejection modal state
   const [rejectModalApp, setRejectModalApp] = useState<AdminAffiliateApplication | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -55,34 +46,32 @@ export default function AdminAffiliatesPage() {
     setError(null);
     try {
       if (activeTab === "applications") {
-        const data = await getAdminApplications(
-          appStatusFilter === "ALL" ? undefined : appStatusFilter
-        );
-        setApplications(data || []);
+        const filter = appStatusFilter === "all" ? null : appStatusFilter;
+        const data = await getAdminApplications(filter);
+        setApplications(data);
       } else {
-        const data = await getAdminAffiliates(undefined, search.trim() || undefined);
-        setAffiliates(data || []);
+        const data = await getAdminAffiliates();
+        setAffiliates(data);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to load affiliate records.");
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Failed to load affiliate records.");
     } finally {
       setLoading(false);
     }
-  }, [activeTab, appStatusFilter, search]);
+  }, [activeTab, appStatusFilter]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   const handleApprove = async (app: AdminAffiliateApplication) => {
-    if (!confirm(`Approve affiliate application for ${app.full_name}? This will generate their referral code and email activation.`)) {
-      return;
-    }
+    if (!confirm(`Approve affiliate application for ${app.full_name}?`)) return;
     setActionLoadingId(app.public_id);
     setError(null);
     try {
       await approveApplication(app.public_id);
-      setSuccessMsg(`Approved ${app.full_name}! Activation invitation dispatched.`);
+      setSuccessMsg(`Approved ${app.full_name}! Activation email sent.`);
       await fetchData();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Failed to approve application.");
@@ -94,11 +83,6 @@ export default function AdminAffiliatesPage() {
   const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectModalApp) return;
-    if (rejectReason.trim().length < 5) {
-      alert("Please provide an audit rejection reason with at least 5 characters.");
-      return;
-    }
-
     setActionLoadingId(rejectModalApp.public_id);
     setError(null);
     try {
@@ -115,54 +99,34 @@ export default function AdminAffiliatesPage() {
   };
 
   const handleSendActivation = async (affiliate: AdminAffiliateItem) => {
-    setActionLoadingId(affiliate.id);
+    setActionLoadingId(affiliate.public_id);
     setError(null);
     try {
-      const res = await resendActivationLink(affiliate.id);
-      setSuccessMsg(res.message || `Activation invitation resent to ${affiliate.email}!`);
+      const res = await resendActivationLink(affiliate.public_id);
+      setSuccessMsg(res.message || `Activation email sent to ${affiliate.email}!`);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to dispatch activation email.");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleToggleStatus = async (affiliate: AdminAffiliateItem) => {
-    const nextStatus = affiliate.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    if (!confirm(`Change partner status for ${affiliate.full_name} to ${nextStatus}?`)) {
-      return;
-    }
-
-    setActionLoadingId(affiliate.id);
-    setError(null);
-    try {
-      await updateAffiliateStatus(affiliate.id, nextStatus);
-      setSuccessMsg(`Partner status updated to ${nextStatus}.`);
-      await fetchData();
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to update affiliate status.");
+      setError(err?.response?.data?.detail || "Failed to send activation email.");
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const filteredApplications = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
     return applications.filter((a) => {
       const name = (a.full_name || "").toLowerCase();
       const email = (a.email || "").toLowerCase();
-      const channels = (a.promotion_channels || "").toLowerCase();
-      return name.includes(query) || email.includes(query) || channels.includes(query);
+      return name.includes(q) || email.includes(q);
     });
   }, [applications, search]);
 
   const filteredAffiliates = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
     return affiliates.filter((a) => {
       const name = (a.full_name || "").toLowerCase();
       const email = (a.email || "").toLowerCase();
       const code = (a.public_code || "").toLowerCase();
-      return name.includes(query) || email.includes(query) || code.includes(query);
+      return name.includes(q) || email.includes(q) || code.includes(q);
     });
   }, [affiliates, search]);
 
@@ -172,13 +136,13 @@ export default function AdminAffiliatesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#2D5A1E]/15 pb-6">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#639E1F] block">
-            Partnership & Growth Governance
+            Partner Governance
           </span>
           <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#172B15] tracking-tight">
             Affiliate <span className="italic font-light text-[#639E1F]">Partner Desk</span>
           </h1>
           <p className="text-xs text-neutral-500 pt-1">
-            Oversee affiliate onboarding, review applications, and audit partner telemetry.
+            Review partner applications, manage directory entries, and issue activation tokens.
           </p>
         </div>
 
@@ -210,7 +174,7 @@ export default function AdminAffiliatesPage() {
         </div>
       </div>
 
-      {/* Primary Tab Controls */}
+      {/* Tabs */}
       <div className="flex space-x-2 border-b border-neutral-200 pb-2">
         <button
           onClick={() => {
@@ -243,7 +207,7 @@ export default function AdminAffiliatesPage() {
         </button>
       </div>
 
-      {/* Notifications */}
+      {/* Error & Success Messages */}
       {error && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -257,7 +221,7 @@ export default function AdminAffiliatesPage() {
         </div>
       )}
 
-      {/* Filter and Search Bar */}
+      {/* Search Bar & Filters */}
       <div className="bg-white rounded-2xl border border-[#2D5A1E]/15 p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
@@ -267,7 +231,7 @@ export default function AdminAffiliatesPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder={
               activeTab === "applications"
-                ? "Search applicants by name, email, channels..."
+                ? "Search applicants by name or email..."
                 : "Search partners by name, email, or code..."
             }
             className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] placeholder-neutral-400 focus:outline-none focus:border-[#639E1F]"
@@ -276,7 +240,7 @@ export default function AdminAffiliatesPage() {
 
         {activeTab === "applications" && (
           <div className="flex items-center space-x-2 w-full md:w-auto overflow-x-auto">
-            {(["PENDING", "APPROVED", "REJECTED", "ALL"] as const).map((st) => (
+            {(["pending", "approved", "rejected", "all"] as const).map((st) => (
               <button
                 key={st}
                 onClick={() => setAppStatusFilter(st)}
@@ -293,22 +257,19 @@ export default function AdminAffiliatesPage() {
         )}
       </div>
 
-      {/* Data Views */}
+      {/* Table Data */}
       <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 shadow-xs overflow-hidden">
         {loading ? (
           <div className="p-20 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
             <span className="text-xs uppercase tracking-widest text-neutral-400 font-bold">
-              Synchronizing partner database...
+              Synchronizing records...
             </span>
           </div>
         ) : activeTab === "applications" ? (
-          /* =========================================================
-             APPLICATIONS DESK TABLE
-             ========================================================= */
           filteredApplications.length === 0 ? (
             <div className="p-16 text-center text-xs text-neutral-500">
-              No applications found matching the current search/status filter.
+              No applications found for this filter.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -346,11 +307,7 @@ export default function AdminAffiliatesPage() {
                       <td className="px-6 py-4">
                         {app.website_url ? (
                           <a
-                            href={
-                              app.website_url.startsWith("http")
-                                ? app.website_url
-                                : `https://${app.website_url}`
-                            }
+                            href={app.website_url.startsWith("http") ? app.website_url : `https://${app.website_url}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[#2D5A1E] hover:underline inline-flex items-center space-x-1"
@@ -364,30 +321,30 @@ export default function AdminAffiliatesPage() {
                       </td>
 
                       <td className="px-6 py-4 font-mono text-[11px] text-neutral-500">
-                        {new Date(app.created_at).toLocaleDateString()}
+                        {new Date(app.submitted_at).toLocaleDateString()}
                       </td>
 
                       <td className="px-6 py-4 text-center">
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            app.status === "APPROVED"
+                            app.status.toLowerCase() === "approved"
                               ? "bg-emerald-100 text-emerald-800"
-                              : app.status === "REJECTED"
+                              : app.status.toLowerCase() === "rejected"
                               ? "bg-red-100 text-red-700"
                               : "bg-amber-100 text-amber-800"
                           }`}
                         >
                           {app.status}
                         </span>
-                        {app.rejection_reason && (
+                        {app.decision_reason && (
                           <p className="text-[10px] text-red-600 mt-1 max-w-[140px] truncate mx-auto">
-                            {app.rejection_reason}
+                            {app.decision_reason}
                           </p>
                         )}
                       </td>
 
                       <td className="px-6 py-4 text-right space-x-2">
-                        {app.status === "PENDING" && (
+                        {app.status.toLowerCase() === "pending" && (
                           <>
                             <button
                               onClick={() => handleApprove(app)}
@@ -413,9 +370,6 @@ export default function AdminAffiliatesPage() {
             </div>
           )
         ) : (
-          /* =========================================================
-             ACTIVE AFFILIATES DIRECTORY TABLE
-             ========================================================= */
           filteredAffiliates.length === 0 ? (
             <div className="p-16 text-center text-xs text-neutral-500">
               No registered affiliate partners found.
@@ -428,8 +382,7 @@ export default function AdminAffiliatesPage() {
                     <th className="px-6 py-4">Affiliate Partner</th>
                     <th className="px-6 py-4">Referral Code</th>
                     <th className="px-6 py-4">Approved Date</th>
-                    <th className="px-6 py-4">Account Status</th>
-                    <th className="px-6 py-4">Activation</th>
+                    <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -455,10 +408,8 @@ export default function AdminAffiliatesPage() {
                       <td className="px-6 py-4">
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            aff.status === "ACTIVE"
+                            aff.status.toLowerCase() === "active"
                               ? "bg-emerald-100 text-emerald-800"
-                              : aff.status === "SUSPENDED"
-                              ? "bg-red-100 text-red-800"
                               : "bg-neutral-100 text-neutral-600"
                           }`}
                         >
@@ -466,56 +417,18 @@ export default function AdminAffiliatesPage() {
                         </span>
                       </td>
 
-                      <td className="px-6 py-4">
-                        {aff.is_activated ? (
-                          <span className="inline-flex items-center space-x-1 text-emerald-700 font-semibold text-[11px]">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Activated</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center space-x-1 text-amber-600 font-semibold text-[11px]">
-                            <Mail className="w-3.5 h-3.5" />
-                            <span>Pending Invite</span>
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {!aff.is_activated && (
-                          <button
-                            onClick={() => handleSendActivation(aff)}
-                            disabled={actionLoadingId === aff.id}
-                            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#172B15] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#2D5A1E] disabled:opacity-50 cursor-pointer shadow-xs"
-                          >
-                            {actionLoadingId === aff.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Send className="w-3 h-3" />
-                            )}
-                            <span>Resend Invite</span>
-                          </button>
-                        )}
-
+                      <td className="px-6 py-4 text-right">
                         <button
-                          onClick={() => handleToggleStatus(aff)}
-                          disabled={actionLoadingId === aff.id}
-                          className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 cursor-pointer shadow-xs ${
-                            aff.status === "ACTIVE"
-                              ? "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
-                              : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                          }`}
+                          onClick={() => handleSendActivation(aff)}
+                          disabled={actionLoadingId === aff.public_id}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#172B15] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#2D5A1E] disabled:opacity-50 cursor-pointer shadow-xs"
                         >
-                          {aff.status === "ACTIVE" ? (
-                            <>
-                              <Ban className="w-3 h-3" />
-                              <span>Suspend</span>
-                            </>
+                          {actionLoadingId === aff.public_id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
-                            <>
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Activate</span>
-                            </>
+                            <Send className="w-3 h-3" />
                           )}
+                          <span>Resend Activation Email</span>
                         </button>
                       </td>
                     </tr>
@@ -527,7 +440,7 @@ export default function AdminAffiliatesPage() {
         )}
       </div>
 
-      {/* Reject Reason Modal */}
+      {/* Reject Modal */}
       {rejectModalApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl border border-neutral-200 p-6 max-w-md w-full shadow-2xl space-y-4">
@@ -535,16 +448,15 @@ export default function AdminAffiliatesPage() {
               Reject Application: {rejectModalApp.full_name}
             </h3>
             <p className="text-xs text-neutral-500">
-              Provide an audit decision note for why this candidate was not accepted.
+              Provide an audit decision note for why this candidate was rejected.
             </p>
             <form onSubmit={handleRejectSubmit} className="space-y-4">
               <textarea
                 rows={3}
                 required
-                minLength={5}
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Reason (e.g. Website does not meet brand criteria, low audience engagement)"
+                placeholder="Reason (e.g. Promotion channels do not align with brand standards)"
                 className="w-full bg-[#FAFAF7] border border-neutral-200 rounded-xl p-3 text-xs text-[#172B15] focus:outline-none focus:border-[#2D5A1E]"
               />
               <div className="flex justify-end space-x-2">
@@ -560,7 +472,7 @@ export default function AdminAffiliatesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoadingId === rejectModalApp.public_id || rejectReason.trim().length < 5}
+                  disabled={actionLoadingId === rejectModalApp.public_id}
                   className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold uppercase hover:bg-red-700 disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   Confirm Rejection

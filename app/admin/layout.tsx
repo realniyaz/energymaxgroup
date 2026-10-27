@@ -159,7 +159,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
     { href: "/admin/products/create", label: "Add New Product", icon: PlusCircle },
     { 
       href: "/admin/affiliates", 
-      label: "Affiliates & Partners", 
+      label: "Affiliates", 
       icon: Users2,
       children: [
         { href: "/admin/affiliates/applications", label: "Applications Desk", icon: UserCheck2Icon },
