@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAffiliateAuth } from "@/context/affiliate-auth-context";
 import {
   getAffiliateDashboard,
@@ -24,47 +25,81 @@ import {
   ExternalLink,
   Loader2,
   Calendar,
+  AlertCircle,
+  RefreshCw,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
 
-export default function AffiliateDashboard() {
-  const { affiliate, logout } = useAffiliateAuth();
+export default function AffiliateDashboardPage() {
+  const router = useRouter();
+  const { affiliate, loading: authLoading, logout } = useAffiliateAuth();
+
+  // State Management
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [performanceData, setPerformanceData] = useState<AffiliatePerformanceResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  // 1. Session Guard
+  useEffect(() => {
+    if (!authLoading && !affiliate) {
+      router.replace("/affiliate/login");
+    }
+  }, [affiliate, authLoading, router]);
+
+  // 2. Fetch Telemetry and Performance Metrics
+  const loadDashboardData = async () => {
+    if (!affiliate) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+
+      const startDateStr = thirtyDaysAgo.toISOString().split("T")[0];
+      const endDateStr = today.toISOString().split("T")[0];
+
+      const [dash, perf] = await Promise.all([
+        getAffiliateDashboard().catch(() => null),
+        getAffiliatePerformance(startDateStr, endDateStr).catch(() => null),
+      ]);
+
+      setDashboardData(dash);
+      setPerformanceData(perf);
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          "Unable to load affiliate metrics. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-
-        const startDateStr = thirtyDaysAgo.toISOString().split("T")[0];
-        const endDateStr = today.toISOString().split("T")[0];
-
-        const [dash, perf] = await Promise.all([
-          getAffiliateDashboard().catch(() => null),
-          getAffiliatePerformance(startDateStr, endDateStr).catch(() => null),
-        ]);
-
-        setDashboardData(dash);
-        setPerformanceData(perf);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     if (affiliate) {
-      loadData();
+      loadDashboardData();
     }
   }, [affiliate]);
 
-  if (!affiliate) {
-    return null;
+  // Prevent flash while checking auth session
+  if (authLoading || !affiliate) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF7] flex flex-col items-center justify-center space-y-3 font-sans">
+        <Loader2 className="w-8 h-8 text-[#2D5A1E] animate-spin" />
+        <p className="text-xs uppercase tracking-widest text-neutral-400 font-bold">
+          Verifying Partner Session...
+        </p>
+      </div>
+    );
   }
 
-  // Uses the backend tracked redirect entrypoint
+  // Tracked Gateway Link (redirects through backend to track visitor hash and tokens)
   const backendBaseUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://energymax-backend.onrender.com";
   const referralTrackingLink = `${backendBaseUrl}/api/v1/affiliates/r/${affiliate.public_code}`;
@@ -86,49 +121,68 @@ export default function AffiliateDashboard() {
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] flex flex-col justify-between font-sans">
       {/* Top Navigation */}
-      <header className="bg-white border-b border-[#2D5A1E]/15 px-6 sm:px-12 py-4 flex items-center justify-between sticky top-0 z-20">
+      <header className="bg-white border-b border-[#2D5A1E]/15 px-6 sm:px-12 py-4 flex items-center justify-between sticky top-0 z-20 shadow-xs">
         <div className="flex items-center space-x-3">
-          <Image src="/logo1.png" alt="EnergyMax Logo" width={32} height={32} />
+          <div className="w-9 h-9 rounded-xl bg-[#2D5A1E]/10 flex items-center justify-center overflow-hidden border border-[#2D5A1E]/20">
+            <Image src="/logo1.png" alt="EnergyMax Logo" width={26} height={26} />
+          </div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-[#172B15] block">
               EnergyMax Partner Portal
             </span>
             <span className="text-[10px] text-neutral-400">
-              Logged in as {affiliate.full_name}
+              Welcome, {affiliate.full_name}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3 sm:space-x-4">
           <Link
             href="/affiliate/wallet"
-            className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-[#F2F8ED] border border-[#639E1F]/30 text-[#2D5A1E] text-xs font-bold uppercase tracking-wider hover:bg-[#639E1F]/20 transition-all"
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-[#F2F8ED] border border-[#639E1F]/30 text-[#2D5A1E] text-xs font-bold uppercase tracking-wider hover:bg-[#639E1F]/20 transition-all shadow-xs"
           >
-            <Wallet className="w-4 h-4 text-[#639E1F]" />
-            <span>Wallet & Payouts</span>
+            <Wallet className="w-3.5 h-3.5 text-[#639E1F]" />
+            <span className="hidden sm:inline">Wallet & Payouts</span>
+            <span className="sm:hidden">Wallet</span>
           </Link>
           <button
             onClick={logout}
-            className="text-xs font-semibold text-neutral-400 hover:text-red-600 flex items-center space-x-1 cursor-pointer transition-colors"
+            className="text-xs font-semibold text-neutral-400 hover:text-red-600 flex items-center space-x-1 cursor-pointer transition-colors p-2 rounded-lg hover:bg-neutral-50"
+            title="Sign Out"
           >
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Sign Out</span>
+            <span className="hidden md:inline">Sign Out</span>
           </button>
         </div>
       </header>
 
       {/* Main Command Center */}
       <main className="max-w-6xl mx-auto w-full p-6 sm:p-10 space-y-8 flex-1">
-        
-        {/* Referral Tracking Showcase Banner */}
+        {/* Error Notification Banner */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              onClick={loadDashboardData}
+              className="text-xs font-bold underline hover:no-underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Showcase Banner with Dynamic Tracking Link */}
         <div className="bg-[#172B15] text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden space-y-6">
           <div className="absolute -top-24 -right-24 w-80 h-80 bg-[#8CC63F]/20 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#8CC63F]/20 text-[#8CC63F] text-[9px] font-bold uppercase tracking-widest mb-2">
-                <Sparkles className="w-3 h-3" />
-                <span>Verified Referral Code</span>
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#8CC63F]/20 text-[#8CC63F] text-[9px] font-bold uppercase tracking-widest mb-2 border border-[#8CC63F]/30">
+                <Sparkles className="w-3 h-3 text-[#8CC63F]" />
+                <span>Active Partner Code</span>
               </div>
               <h2 className="text-3xl sm:text-4xl font-mono font-bold tracking-wider text-white">
                 {affiliate.public_code}
@@ -137,7 +191,7 @@ export default function AffiliateDashboard() {
 
             <button
               onClick={copyToClipboard}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#8CC63F] text-[#172B15] font-bold text-xs uppercase tracking-wider hover:bg-[#7db435] transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md"
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#8CC63F] text-[#172B15] font-bold text-xs uppercase tracking-wider hover:bg-[#7db435] transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md active:scale-[0.98]"
             >
               {copied ? (
                 <>
@@ -147,7 +201,7 @@ export default function AffiliateDashboard() {
               ) : (
                 <>
                   <Copy className="w-4 h-4" />
-                  <span>Copy Partner Referral Link</span>
+                  <span>Copy Partner Link</span>
                 </>
               )}
             </button>
@@ -157,17 +211,22 @@ export default function AffiliateDashboard() {
             <span className="font-mono text-[11px] break-all select-all text-neutral-300">
               {referralTrackingLink}
             </span>
-            <span className="text-[10px] text-[#8CC63F] uppercase tracking-wider font-semibold">
-              Status: {affiliate.status.toUpperCase()}
-            </span>
+            <div className="flex items-center space-x-3 shrink-0">
+              <span className="text-[10px] text-[#8CC63F] uppercase tracking-wider font-semibold">
+                Status: {affiliate.status.toUpperCase()}
+              </span>
+              <span className="text-[10px] text-neutral-400">
+                30-Day Window Enforced
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Real-time Telemetry Metrics */}
         {loading ? (
-          <div className="py-12 flex justify-center items-center space-x-2 text-xs text-neutral-400">
-            <Loader2 className="w-5 h-5 animate-spin text-[#2D5A1E]" />
-            <span>Loading telemetry metrics...</span>
+          <div className="py-16 flex flex-col justify-center items-center space-y-3 text-xs text-neutral-400 bg-white rounded-3xl border border-[#2D5A1E]/15">
+            <Loader2 className="w-6 h-6 animate-spin text-[#2D5A1E]" />
+            <span>Synchronizing live partner telemetry...</span>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -227,7 +286,7 @@ export default function AffiliateDashboard() {
                     href="/affiliate/wallet"
                     className="text-[10px] font-bold text-[#639E1F] hover:underline flex items-center space-x-1"
                   >
-                    <span>Wallet</span>
+                    <span>View Wallet</span>
                     <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>
@@ -250,7 +309,7 @@ export default function AffiliateDashboard() {
                 Recent 30-Day Activity Breakdown
               </h3>
               <p className="text-xs text-neutral-400">
-                Track visitor impressions, attribution rate, and daily conversions.
+                Track visitor impressions, attribution rates, and daily conversions.
               </p>
             </div>
             <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-[#FAFAF7] border border-neutral-200 text-xs text-neutral-500 font-mono">
@@ -329,10 +388,10 @@ export default function AffiliateDashboard() {
           <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs flex flex-col justify-between space-y-4">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-widest text-[#2D5A1E]">
-                Storefront Preview
+                Storefront Verification
               </h3>
               <p className="text-xs text-neutral-500 mt-2 leading-relaxed">
-                Test your partner link tracking before sharing with your audience. When visitors land on our boutique via your code, the attribution cookie persists for 30 days.
+                Test your partner link tracking before sharing with your audience. When visitors land on our boutique via your link, attribution cookies persist for 30 days.
               </p>
             </div>
 
@@ -347,9 +406,9 @@ export default function AffiliateDashboard() {
             </a>
           </div>
         </div>
-
       </main>
 
+      {/* Footer */}
       <footer className="text-center py-6 text-[10px] text-neutral-400 uppercase tracking-widest border-t border-[#2D5A1E]/10">
         EnergyMax Cellular Health Partner Ecosystem
       </footer>

@@ -43,6 +43,7 @@ export const AffiliateAuthProvider = ({
 
   const fetchProfile = useCallback(async () => {
     const token = getAffiliateAccessToken();
+    // 🛡️ CRITICAL GUARD: Do NOT call /auth/me without a token.
     if (!token) {
       setAffiliate(null);
       setLoading(false);
@@ -66,18 +67,21 @@ export const AffiliateAuthProvider = ({
 
   const login = async (email: string, pass: string, captcha: string) => {
     const res = await apiLogin(email, pass, captcha);
+    // Explicitly set token first before updating React state
+    setAffiliateAccessToken(res.access_token);
     setAffiliate(res.affiliate);
-    router.push("/affiliate/dashboard");
+    router.replace("/affiliate/dashboard");
   };
 
   const logout = async () => {
     try {
       await apiLogout();
     } catch {
-      // Clear local state even if token was already revoked
+      // Clear local state even if backend network call failed
     } finally {
+      setAffiliateAccessToken(null);
       setAffiliate(null);
-      router.push("/affiliate/login");
+      router.replace("/affiliate/login");
     }
   };
 

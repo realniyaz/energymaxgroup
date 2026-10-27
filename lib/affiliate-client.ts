@@ -8,18 +8,15 @@ export const affiliateClient = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
-    "ngrok-skip-browser-warning": "true",
   },
 });
 
-let inMemoryAffiliateToken: string | null = null;
-
-if (typeof window !== "undefined") {
-  inMemoryAffiliateToken = localStorage.getItem("affiliate_access_token");
+export function getAffiliateAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("affiliate_access_token");
 }
 
 export function setAffiliateAccessToken(token: string | null) {
-  inMemoryAffiliateToken = token;
   if (typeof window !== "undefined") {
     if (token) {
       localStorage.setItem("affiliate_access_token", token);
@@ -31,19 +28,12 @@ export function setAffiliateAccessToken(token: string | null) {
   }
 }
 
-export function getAffiliateAccessToken(): string | null {
-  if (inMemoryAffiliateToken) return inMemoryAffiliateToken;
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("affiliate_access_token");
-  }
-  return null;
-}
-
-// Request Interceptor: Injects Bearer token
+// Request Interceptor: Always attach the latest token directly from storage
 affiliateClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = getAffiliateAccessToken();
-    if (token && config.headers) {
+    if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -51,19 +41,22 @@ affiliateClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error)
 );
 
-// Response Interceptor: Catches 401s on protected affiliate routes
+// Response Interceptor: Only redirect on 401 if not already on the login page
 affiliateClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<any>) => {
+  (error: AxiosError) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
-      const isAuthRoute =
-        error.config?.url?.includes("/affiliates/auth/login") ||
-        error.config?.url?.includes("/affiliates/auth/activate");
-
       const pathname = window.location.pathname;
+      const isAuthRoute =
+        pathname.includes("/affiliate/login") ||
+        pathname.includes("/affiliate/activate") ||
+        pathname.includes("/affiliates/apply");
 
+      // Clear stale token
+      setAffiliateAccessToken(null);
+
+      // Only redirect if actively inside protected affiliate pages and not already logging in
       if (!isAuthRoute && pathname.startsWith("/affiliate")) {
-        setAffiliateAccessToken(null);
         window.location.href = "/affiliate/login";
       }
     }
