@@ -26,6 +26,15 @@ export interface OrderItem {
   subtotal: number | string;
 }
 
+export interface OrderItemResponse {
+  public_id: string;
+  product_id?: number;
+  product_name: string;
+  unit_price: number | string;
+  quantity: number;
+  subtotal: number | string;
+}
+
 export interface OrderAddress {
   recipient_name?: string;
   phone?: string;
@@ -44,6 +53,7 @@ export type OrderStatus =
   | "pending"
   | "pending_payment"
   | "paid"
+  | "confirmed"
   | "packed"
   | "processing"
   | "shipped"
@@ -95,9 +105,6 @@ export interface OrderTrackingResponse {
   shipment?: ShipmentResponse | null;
 }
 
-/**
- * Single Order Detail (matches Order entity / checkout conversion)
- */
 export interface OrderResponse {
   public_id: string;
   order_number: string;
@@ -121,9 +128,6 @@ export interface OrderResponse {
   updated_at?: string;
 }
 
-/**
- * Single Order Item from GET /api/v1/shop/orders/my
- */
 export interface MyOrderSummaryItem {
   public_id: string;
   order_number: string;
@@ -143,9 +147,6 @@ export interface MyOrderSummaryItem {
   updated_at: string;
 }
 
-/**
- * Response schema for GET /api/v1/shop/orders/my
- */
 export interface MyOrdersResponse {
   items: MyOrderSummaryItem[];
   total: number;
@@ -161,9 +162,6 @@ export interface OrderListResponse {
   page_size?: number;
 }
 
-/**
- * Utility helper to safely parse high-precision decimal strings from the backend
- */
 export function parseOrderAmount(val: number | string | undefined | null): number {
   if (val === null || val === undefined) return 0;
   if (typeof val === "number") return val;
@@ -176,6 +174,26 @@ export function parseOrderAmount(val: number | string | undefined | null): numbe
  * ORDER API METHODS
  * =========================================================
  */
+
+/**
+ * POST /api/v1/shop/orders/from-checkout/{checkout_id}
+ * Converts confirmed and locked checkout session into a finalized customer order.
+ * Accepts optional tracking token payload for affiliate conversion attribution.
+ */
+export async function createOrderFromCheckout(
+  checkoutPublicId: string,
+  payload?: CreateOrderPayload
+): Promise<OrderResponse> {
+  const requestBody = {
+    tracking_token: payload?.tracking_token?.trim() || null,
+  };
+
+  const res = await customerClient.post<OrderResponse>(
+    `/api/v1/shop/orders/from-checkout/${checkoutPublicId}`,
+    requestBody
+  );
+  return res.data;
+}
 
 /**
  * GET /api/v1/shop/orders/my
@@ -198,24 +216,8 @@ export async function getMyOrders(
 }
 
 /**
- * POST /api/v1/shop/orders/from-checkout/{checkout_id}
- * Converts confirmed and locked checkout session into a finalized customer order.
- * Optionally forwards affiliate referral tracking_token for conversion attribution.
- */
-export async function createOrderFromCheckout(
-  checkoutPublicId: string,
-  payload?: CreateOrderPayload
-): Promise<OrderResponse> {
-  const res = await customerClient.post<OrderResponse>(
-    `/api/v1/shop/orders/from-checkout/${checkoutPublicId}`,
-    payload || {}
-  );
-  return res.data;
-}
-
-/**
  * GET /api/v1/shop/orders
- * Returns customer order history (standard/admin listing fallback).
+ * Returns customer order history (fallback list).
  */
 export async function getCustomerOrders(
   page: number = 1,
@@ -261,7 +263,7 @@ export async function trackOrderByNumber(
   orderNumber: string
 ): Promise<OrderTrackingResponse> {
   const res = await customerClient.get<OrderTrackingResponse>(
-    `/api/v1/shop/orders/track/${encodeURIComponent(orderNumber)}`
+    `/api/v1/shop/orders/track/${encodeURIComponent(orderNumber.trim().toUpperCase())}`
   );
   return res.data;
 }

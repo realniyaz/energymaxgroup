@@ -38,7 +38,10 @@ import {
 import { loadCashfreeSDK } from "@/lib/cashfree";
 import CheckoutCouponBox from "@/app/components/checkout/CheckoutCouponBox";
 import { CouponApplyResponse } from "@/lib/services/couponService";
-import { getStoredReferralData } from "@/lib/affiliate-tracking";
+import {
+  getStoredReferralData,
+  clearStoredReferralData,
+} from "@/lib/affiliate-tracking";
 
 const LABEL_ICONS: Record<string, React.ReactNode> = {
   Home: <Home className="w-4 h-4" />,
@@ -75,7 +78,7 @@ export default function CheckoutPage({
 
   const [, startTransition] = useTransition();
 
-  // 1. Initial Load: Concurrently fetch Checkout, Addresses, and preload Cashfree SDK
+  // 1. Initial Load: Fetch Checkout, Saved Addresses, and pre-warm Cashfree SDK
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -132,7 +135,7 @@ export default function CheckoutPage({
     };
   }, [checkoutId, isAuthenticated, authLoading, router]);
 
-  // 2. High-Performance Countdown Timer
+  // 2. Countdown Timer
   useEffect(() => {
     const expiresAt = checkout?.expires_at;
     if (!expiresAt) return;
@@ -158,7 +161,7 @@ export default function CheckoutPage({
     return () => clearInterval(interval);
   }, [checkout?.expires_at]);
 
-  // 3. Optimistic Address Selection
+  // 3. Address Selection
   const handleAddressChange = useCallback(async (addressPublicId: string) => {
     setSelectedAddressPublicId(addressPublicId);
     setUpdatingAddress(true);
@@ -209,16 +212,19 @@ export default function CheckoutPage({
 
       setPaymentPhase("Generating order reservation...");
 
-      // Pull tracked referral data saved by ReferralTracker in Stage 1
+      // Pull tracked referral token from cookies / localStorage
       const { trackingToken } = getStoredReferralData();
 
-      // Pass the tracking token to the backend for affiliate attribution
+      // Pass tracking token to backend for affiliate attribution
       const order = await createOrderFromCheckout(checkoutId, {
         tracking_token: trackingToken || undefined,
       });
       createdOrderPublicId = order.public_id;
 
-      // Sync cart in background non-blockingly
+      // Attribution captured; clear stored token
+      clearStoredReferralData();
+
+      // Non-blocking background cart refresh
       refreshCart().catch(() => null);
 
       setPaymentPhase("Securing encrypted payment session...");
@@ -353,7 +359,7 @@ export default function CheckoutPage({
         {/* 2-Column Responsive Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* LEFT COLUMN: Shipping Address Selector */}
+          {/* LEFT COLUMN: Shipping Destination Selector */}
           <div className="lg:col-span-7 space-y-6">
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#2D5A1E]/15 shadow-xs space-y-6">
               <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
@@ -409,6 +415,7 @@ export default function CheckoutPage({
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center space-x-2">
+                              {LABEL_ICONS[addr.label] || null}
                               <span className="text-xs font-bold text-[#172B15]">{addr.recipient_name}</span>
                               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white border border-neutral-200 text-neutral-600">
                                 {addr.label}
@@ -478,8 +485,8 @@ export default function CheckoutPage({
               {/* Coupon Redemption Box */}
               <CheckoutCouponBox
                 checkoutPublicId={checkoutId}
-                currentCouponCode={(checkout as any)?.coupon_code}
-                discountPercent={(checkout as any)?.discount_percent}
+                currentCouponCode={checkout?.coupon_code || undefined}
+                discountPercent={checkout?.discount_percent || undefined}
                 onCouponUpdated={handleCouponUpdated}
               />
 
@@ -494,9 +501,9 @@ export default function CheckoutPage({
                   <div className="flex items-center justify-between text-[#2D5A1E] font-medium">
                     <div className="flex items-center space-x-1">
                       <span>Promotional Discount</span>
-                      {(checkout as any)?.coupon_code && (
+                      {checkout?.coupon_code && (
                         <span className="font-mono text-[10px] bg-[#8CC63F]/20 px-1.5 py-0.5 rounded">
-                          {(checkout as any).coupon_code}
+                          {checkout.coupon_code}
                         </span>
                       )}
                     </div>
@@ -541,7 +548,7 @@ export default function CheckoutPage({
               </button>
 
               <p className="text-[10px] text-center text-neutral-400">
-                By confirming, you lock this batch allocation.
+                By confirming, you lock this batch allocation under 256-bit encrypted patron terms.
               </p>
             </div>
           </div>
