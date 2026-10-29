@@ -126,12 +126,18 @@ export interface WithdrawalItem {
   affiliate_id: number;
   amount: string | number;
   currency: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "PAID";
+  status: "PENDING" | "APPROVED" | "PROCESSING" | "REJECTED" | "PAID" | "FAILED";
   payout_reference?: string | null;
   rejection_reason?: string | null;
   requested_at: string;
   reviewed_at?: string | null;
   paid_at?: string | null;
+  provider?: string | null;
+  provider_reference?: string | null;
+  beneficiary_reference?: string | null;
+  payment_initiated_at?: string | null;
+  failure_reason?: string | null;
+  last_provider_status?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -140,6 +146,105 @@ export interface WithdrawalCreatePayload {
   amount: number;
   currency: string;
   idempotency_key: string;
+}
+
+/**
+ * =========================================================
+ * KYC INTERFACES (Manual & Automated Secure ID)
+ * =========================================================
+ */
+
+export type KYCStatus =
+  | "NOT_STARTED"
+  | "PENDING_REVIEW"
+  | "IN_REVIEW"
+  | "RESUBMISSION_REQUIRED"
+  | "REJECTED"
+  | "VERIFIED";
+
+export type DocumentType = "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD";
+
+export interface PANVerificationPayload {
+  pan: string;
+  name?: string | null;
+}
+
+export interface PANVerificationResponse {
+  success: boolean;
+  affiliate_id: string;
+  document_type: string;
+  masked_pan: string;
+  verified: boolean;
+  provider_status?: string | null;
+  message: string;
+}
+
+export interface AadhaarOTPPayload {
+  aadhaar_number: string;
+}
+
+export interface AadhaarOTPResponse {
+  document_type: string;
+  masked_aadhaar: string;
+  otp_sent: boolean;
+  reference_id: string;
+  message: string;
+}
+
+export interface AadhaarVerifyPayload {
+  reference_id: string;
+  otp: string;
+}
+
+export interface AadhaarVerifyResponse {
+  document_type: string;
+  verified: boolean;
+  provider_status?: string | null;
+  reference_id: string;
+  message: string;
+}
+
+export interface ManualKYCStatusResponse {
+  status: KYCStatus;
+  submission_id?: string | null;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  decision_reason?: string | null;
+}
+
+export interface KYCDocumentMeta {
+  public_id: string;
+  document_type: DocumentType;
+  original_filename: string;
+  content_type: string;
+  file_size_bytes: number;
+  sha256_checksum?: string;
+  uploaded_at: string;
+}
+
+export interface ManualKYCDocumentsResponse {
+  status: KYCStatus;
+  submission_id?: string | null;
+  documents: Array<{
+    document_type: DocumentType;
+    uploaded: boolean;
+    original_filename: string;
+    content_type: string;
+    file_size_bytes: number;
+    uploaded_at: string;
+  }>;
+}
+
+export interface ManualKYCSubmissionResponse {
+  public_id: string;
+  affiliate_id: number;
+  status: KYCStatus;
+  assigned_reviewer_id?: number | null;
+  submitted_at: string;
+  reviewed_at?: string | null;
+  decision_reason?: string | null;
+  documents: KYCDocumentMeta[];
+  review_history: any[];
 }
 
 /**
@@ -230,7 +335,7 @@ export async function getAffiliatePerformance(
   return res.data;
 }
 
-// Commissions & Earnings (Supports entry_type and order-level filter)
+// Commissions & Earnings
 export async function getAffiliateCommissions(
   limit = 50,
   offset = 0,
@@ -298,6 +403,76 @@ export async function requestAffiliateWithdrawal(
   const res = await affiliateClient.post<WithdrawalItem>(
     "/api/v1/affiliate/withdrawals",
     payload
+  );
+  return res.data;
+}
+
+// =========================================================
+// KYC OPERATIONS (Automated Cashfree & Manual)
+// =========================================================
+
+export async function verifyAffiliatePAN(
+  payload: PANVerificationPayload
+): Promise<PANVerificationResponse> {
+  const res = await affiliateClient.post<PANVerificationResponse>(
+    "/api/v1/affiliate/kyc/pan/verify",
+    payload
+  );
+  return res.data;
+}
+
+export async function generateAffiliateAadhaarOTP(
+  payload: AadhaarOTPPayload
+): Promise<AadhaarOTPResponse> {
+  const res = await affiliateClient.post<AadhaarOTPResponse>(
+    "/api/v1/affiliate/kyc/aadhaar/otp",
+    payload
+  );
+  return res.data;
+}
+
+export async function verifyAffiliateAadhaarOTP(
+  payload: AadhaarVerifyPayload
+): Promise<AadhaarVerifyResponse> {
+  const res = await affiliateClient.post<AadhaarVerifyResponse>(
+    "/api/v1/affiliate/kyc/aadhaar/verify",
+    payload
+  );
+  return res.data;
+}
+
+export async function getManualKYCStatus(): Promise<ManualKYCStatusResponse> {
+  const res = await affiliateClient.get<ManualKYCStatusResponse>(
+    "/api/v1/affiliate/kyc/manual/status"
+  );
+  return res.data;
+}
+
+export async function getManualKYCDocuments(): Promise<ManualKYCDocumentsResponse> {
+  const res = await affiliateClient.get<ManualKYCDocumentsResponse>(
+    "/api/v1/affiliate/kyc/manual/documents"
+  );
+  return res.data;
+}
+
+export async function submitManualKYC(
+  aadhaarFrontFile: File,
+  aadhaarBackFile: File,
+  panCardFile: File
+): Promise<ManualKYCSubmissionResponse> {
+  const formData = new FormData();
+  formData.append("aadhaar_front", aadhaarFrontFile);
+  formData.append("aadhaar_back", aadhaarBackFile);
+  formData.append("pan_card", panCardFile);
+
+  const res = await affiliateClient.post<ManualKYCSubmissionResponse>(
+    "/api/v1/affiliate/kyc/manual/submit",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
   );
   return res.data;
 }

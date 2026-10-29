@@ -3,17 +3,35 @@ import { apiClient } from "@/lib/api-client";
 
 /**
  * =========================================================
- * SCHEMAS & INTERFACES (Aligned with Backend Models & Schemas)
+ * SCHEMAS & INTERFACES
  * =========================================================
  */
 
 export type AffiliateApplicationStatus = "pending" | "approved" | "rejected";
 export type AffiliateStatus = "active" | "inactive" | "suspended";
-export type WithdrawalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PAID";
+export type WithdrawalStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "PROCESSING"
+  | "REJECTED"
+  | "PAID"
+  | "FAILED";
 export type LedgerEntryType = "COMMISSION" | "REVERSAL" | "ADJUSTMENT";
 
+export type AdminKYCStatus =
+  | "NOT_STARTED"
+  | "PENDING_REVIEW"
+  | "IN_REVIEW"
+  | "RESUBMISSION_REQUIRED"
+  | "REJECTED"
+  | "VERIFIED";
+
+export type AdminReviewDecision =
+  | "APPROVED"
+  | "REJECTED"
+  | "RESUBMISSION_REQUESTED";
+
 export interface AdminAffiliateApplication {
-  id?: number;
   public_id: string;
   full_name: string;
   email: string;
@@ -29,7 +47,6 @@ export interface AdminAffiliateApplication {
 }
 
 export interface AdminAffiliateItem {
-  id?: number;
   public_id: string;
   full_name: string;
   email: string;
@@ -37,15 +54,13 @@ export interface AdminAffiliateItem {
   public_code: string;
   status: string;
   approved_at: string;
-  activated_at?: string | null;
-  last_login_at?: string | null;
   created_at: string;
 }
 
 export interface CommissionPolicyCreatePayload {
   affiliate_public_id?: string | null;
   commission_rate: number;
-  effective_from: string; // ISO 8601 with timezone (e.g. 2026-10-27T00:00:00Z)
+  effective_from: string; // ISO 8601 UTC
   effective_until?: string | null;
 }
 
@@ -91,8 +106,88 @@ export interface AdminWithdrawalItem {
   reviewed_at?: string | null;
   reviewed_by_admin_id?: number | null;
   paid_at?: string | null;
+  provider?: string | null;
+  provider_reference?: string | null;
+  beneficiary_reference?: string | null;
+  payment_initiated_at?: string | null;
+  failure_reason?: string | null;
+  last_provider_status?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface WithdrawalStartProcessingPayload {
+  provider: string;
+  beneficiary_reference: string;
+}
+
+/**
+ * KYC Admin Schemas
+ */
+export interface AdminKYCDocumentItem {
+  public_id: string;
+  document_type: "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD";
+  original_filename: string;
+  content_type: string;
+  file_size_bytes: number;
+  sha256_checksum: string;
+  uploaded_at: string;
+}
+
+export interface AdminKYCHistoryItem {
+  public_id: string;
+  reviewer_id?: number | null;
+  previous_status?: string | null;
+  new_status: string;
+  action: string;
+  reason?: string | null;
+  created_at: string;
+}
+
+export interface AdminKYCSubmissionItem {
+  public_id: string;
+  affiliate_id: number;
+  status: AdminKYCStatus;
+  assigned_reviewer_id?: number | null;
+  submitted_at: string;
+  reviewed_at?: string | null;
+  decision_reason?: string | null;
+  documents: AdminKYCDocumentItem[];
+  review_history: AdminKYCHistoryItem[];
+}
+
+export interface AdminKYCQueueSummary {
+  total_submissions: number;
+  pending_review: number;
+  in_review: number;
+  resubmission_required: number;
+  rejected: number;
+  verified: number;
+}
+
+export interface AdminKYCDecisionPayload {
+  decision: AdminReviewDecision;
+  reason?: string | null;
+}
+
+export interface AdminKYCReassignPayload {
+  reviewer_id: number;
+  reason: string;
+}
+
+export interface AdminKYCReassignResponse {
+  submission_id: string;
+  status: string;
+  previous_reviewer_id?: number | null;
+  assigned_reviewer_id: number;
+  reason: string;
+}
+
+export interface AdminKYCHistoryListResponse {
+  submission_id: string;
+  current_status: string;
+  total_events: number;
+  history: AdminKYCHistoryItem[];
 }
 
 /**
@@ -327,7 +422,18 @@ export async function getAdminWithdrawals(
   return Array.isArray(res.data) ? res.data : [];
 }
 
-export async function approveWithdrawal(publicId: string): Promise<AdminWithdrawalItem> {
+export async function getAdminWithdrawalById(
+  publicId: string
+): Promise<AdminWithdrawalItem> {
+  const res = await apiClient.get<AdminWithdrawalItem>(
+    `/api/v1/admin/affiliates/withdrawals/${publicId}`
+  );
+  return res.data;
+}
+
+export async function approveWithdrawal(
+  publicId: string
+): Promise<AdminWithdrawalItem> {
   const res = await apiClient.post<AdminWithdrawalItem>(
     `/api/v1/admin/affiliates/withdrawals/${publicId}/approve`
   );
@@ -345,6 +451,17 @@ export async function rejectWithdrawal(
   return res.data;
 }
 
+export async function startWithdrawalProcessing(
+  publicId: string,
+  payload: WithdrawalStartProcessingPayload
+): Promise<AdminWithdrawalItem> {
+  const res = await apiClient.post<AdminWithdrawalItem>(
+    `/api/v1/admin/affiliates/withdrawals/${publicId}/start-processing`,
+    payload
+  );
+  return res.data;
+}
+
 export async function markWithdrawalPaid(
   publicId: string,
   payoutReference: string
@@ -355,3 +472,97 @@ export async function markWithdrawalPaid(
   );
   return res.data;
 }
+
+/**
+ * =========================================================
+ * 6. ADMIN AFFILIATE KYC DESK (/api/v1/admin/affiliate-kyc)
+ * =========================================================
+ */
+
+export async function getAdminKYCQueueSummary(): Promise<AdminKYCQueueSummary> {
+  const res = await apiClient.get<AdminKYCQueueSummary>(
+    "/api/v1/admin/affiliate-kyc/queue/summary"
+  );
+  return res.data;
+}
+
+export async function getAdminKYCSubmissions(
+  statusFilter?: AdminKYCStatus | null,
+  limit = 50,
+  offset = 0
+): Promise<{ items: AdminKYCSubmissionItem[]; limit: number; offset: number }> {
+  const res = await apiClient.get<{
+    items: AdminKYCSubmissionItem[];
+    limit: number;
+    offset: number;
+  }>("/api/v1/admin/affiliate-kyc", {
+    params: {
+      status: statusFilter || undefined,
+      limit,
+      offset,
+    },
+  });
+  return res.data;
+}
+
+export async function getAdminKYCSubmission(
+  submissionId: number | string
+): Promise<AdminKYCSubmissionItem> {
+  const res = await apiClient.get<AdminKYCSubmissionItem>(
+    `/api/v1/admin/affiliate-kyc/${submissionId}`
+  );
+  return res.data;
+}
+
+export async function claimAdminKYCSubmission(
+  submissionId: number | string
+): Promise<AdminKYCSubmissionItem> {
+  const res = await apiClient.post<AdminKYCSubmissionItem>(
+    `/api/v1/admin/affiliate-kyc/${submissionId}/claim`
+  );
+  return res.data;
+}
+
+export async function decideAdminKYCSubmission(
+  submissionId: number | string,
+  payload: AdminKYCDecisionPayload
+): Promise<AdminKYCSubmissionItem> {
+  const res = await apiClient.post<AdminKYCSubmissionItem>(
+    `/api/v1/admin/affiliate-kyc/${submissionId}/decision`,
+    payload
+  );
+  return res.data;
+}
+
+export async function downloadAdminKYCDocument(
+  submissionId: number | string,
+  documentType: "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD"
+): Promise<Blob> {
+  const res = await apiClient.get<Blob>(
+    `/api/v1/admin/affiliate-kyc/${submissionId}/documents/${documentType}`,
+    {
+      responseType: "blob",
+    }
+  );
+  return res.data;
+}
+
+export async function reassignAdminKYCSubmission(
+  submissionId: number | string,
+  payload: AdminKYCReassignPayload
+): Promise<AdminKYCReassignResponse> {
+  const res = await apiClient.post<AdminKYCReassignResponse>(
+    `/api/v1/admin/affiliate-kyc/${submissionId}/reassign`,
+    payload
+  );
+  return res.data;
+}
+
+export async function getAdminKYCReviewHistory(
+  submissionId: number | string
+): Promise<AdminKYCHistoryListResponse> {
+  const res = await apiClient.get<AdminKYCHistoryListResponse>(
+    `/api/v1/admin/affiliate-kyc/${submissionId}/history`
+  );
+  return res.data;
+} 

@@ -36,7 +36,8 @@ import {
   UserCheck2Icon,
   ReceiptIcon,
   PercentIcon,
-  IndianRupeeIcon
+  IndianRupeeIcon,
+  SearchCheckIcon
 } from "lucide-react";
 import { AdminAuthProvider, useAdminAuth } from "@/context/admin-auth-context";
 import { 
@@ -164,6 +165,7 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
       icon: Users2,
       children: [
         { href: "/admin/affiliates/applications", label: "Applications Desk", icon: UserCheck2Icon },
+        { href: "/admin/affiliates/kyc", label: "KYC Desk", icon: SearchCheckIcon },
         { href: "/admin/affiliates", label: "Partner Directory", icon: Users },
         { href: "/admin/affiliates/commissions", label: "Commissions", icon: IndianRupeeIcon },
         { href: "/admin/affiliates/settlements", label: "Payout Settlements", icon: ReceiptIcon },
