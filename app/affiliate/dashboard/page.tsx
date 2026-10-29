@@ -9,8 +9,11 @@ import { useAffiliateAuth } from "@/context/affiliate-auth-context";
 import {
   getAffiliateDashboard,
   getAffiliatePerformance,
+  getManualKYCStatus,
   DashboardResponse,
   AffiliatePerformanceResponse,
+  ManualKYCStatusResponse,
+  KYCStatus,
 } from "@/lib/services/affiliateService";
 import {
   Copy,
@@ -29,6 +32,9 @@ import {
   RefreshCw,
   Clock,
   ShieldCheck,
+  ShieldAlert,
+  FileCheck,
+  ChevronRight,
 } from "lucide-react";
 
 export default function AffiliateDashboardPage() {
@@ -38,6 +44,7 @@ export default function AffiliateDashboardPage() {
   // State Management
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [performanceData, setPerformanceData] = useState<AffiliatePerformanceResponse | null>(null);
+  const [kycStatus, setKycStatus] = useState<ManualKYCStatusResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
@@ -49,7 +56,7 @@ export default function AffiliateDashboardPage() {
     }
   }, [affiliate, authLoading, router]);
 
-  // 2. Fetch Telemetry and Performance Metrics
+  // 2. Fetch Telemetry, Performance Metrics, and KYC Compliance Status
   const loadDashboardData = async () => {
     if (!affiliate) return;
 
@@ -64,13 +71,15 @@ export default function AffiliateDashboardPage() {
       const startDateStr = thirtyDaysAgo.toISOString().split("T")[0];
       const endDateStr = today.toISOString().split("T")[0];
 
-      const [dash, perf] = await Promise.all([
+      const [dash, perf, kyc] = await Promise.all([
         getAffiliateDashboard().catch(() => null),
         getAffiliatePerformance(startDateStr, endDateStr).catch(() => null),
+        getManualKYCStatus().catch(() => null),
       ]);
 
       setDashboardData(dash);
       setPerformanceData(perf);
+      setKycStatus(kyc);
     } catch (err: any) {
       setError(
         err?.response?.data?.detail ||
@@ -118,6 +127,55 @@ export default function AffiliateDashboardPage() {
       })
     : "0.00";
 
+  // KYC Badge Helper
+  const renderKycBadge = (status?: KYCStatus) => {
+    switch (status) {
+      case "VERIFIED":
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            <span>KYC Verified</span>
+          </span>
+        );
+      case "IN_REVIEW":
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-300">
+            <Clock className="w-3 h-3 text-blue-600" />
+            <span>KYC In Review</span>
+          </span>
+        );
+      case "RESUBMISSION_REQUIRED":
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+            <AlertCircle className="w-3 h-3 text-amber-600" />
+            <span>Resubmission Required</span>
+          </span>
+        );
+      case "REJECTED":
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-300">
+            <ShieldAlert className="w-3 h-3 text-rose-600" />
+            <span>KYC Rejected</span>
+          </span>
+        );
+      case "PENDING_REVIEW":
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+            <Clock className="w-3 h-3 text-amber-500" />
+            <span>KYC Pending Review</span>
+          </span>
+        );
+      case "NOT_STARTED":
+      default:
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-600 border border-neutral-200">
+            <AlertCircle className="w-3 h-3 text-neutral-400" />
+            <span>KYC Action Required</span>
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#172B15] flex flex-col justify-between font-sans">
       {/* Top Navigation */}
@@ -136,7 +194,16 @@ export default function AffiliateDashboardPage() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Header KYC Action Button */}
+          <Link
+            href="/affiliate/kyc"
+            className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white border border-[#2D5A1E]/20 text-[#172B15] text-xs font-bold uppercase tracking-wider hover:bg-[#FAFAF7] transition-all shadow-xs"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#639E1F]" />
+            <span className="hidden md:inline">KYC Compliance</span>
+          </Link>
+
           <Link
             href="/affiliate/wallet"
             className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-[#F2F8ED] border border-[#639E1F]/30 text-[#2D5A1E] text-xs font-bold uppercase tracking-wider hover:bg-[#639E1F]/20 transition-all shadow-xs"
@@ -145,6 +212,7 @@ export default function AffiliateDashboardPage() {
             <span className="hidden sm:inline">Wallet & Payouts</span>
             <span className="sm:hidden">Wallet</span>
           </Link>
+
           <button
             onClick={logout}
             className="text-xs font-semibold text-neutral-400 hover:text-red-600 flex items-center space-x-1 cursor-pointer transition-colors p-2 rounded-lg hover:bg-neutral-50"
@@ -171,6 +239,38 @@ export default function AffiliateDashboardPage() {
             >
               Retry
             </button>
+          </div>
+        )}
+
+        {/* KYC Compliance Status Action Card (Shown if not yet Verified) */}
+        {kycStatus?.status !== "VERIFIED" && (
+          <div className="bg-gradient-to-r from-amber-50 to-[#FAFAF7] border border-amber-200/90 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-start space-x-3.5">
+              <div className="p-2.5 rounded-2xl bg-amber-100/80 text-amber-800 shrink-0 mt-0.5">
+                <ShieldAlert className="w-5 h-5 text-amber-700" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-800 block">
+                    Identity Verification Required
+                  </span>
+                  {renderKycBadge(kycStatus?.status)}
+                </div>
+                <p className="text-xs text-neutral-600 max-w-xl">
+                  {kycStatus?.decision_reason
+                    ? `Compliance note: "${kycStatus.decision_reason}"`
+                    : "Complete your PAN & Aadhaar online verification or submit your manual KYC dossier to unlock bank payout disbursements."}
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/affiliate/kyc"
+              className="px-5 py-2.5 rounded-2xl bg-[#172B15] text-white font-bold text-xs uppercase tracking-wider hover:bg-[#2D5A1E] transition-all flex items-center space-x-1.5 shrink-0 shadow-xs"
+            >
+              <span>Complete KYC</span>
+              <ChevronRight className="w-3.5 h-3.5 text-[#8CC63F]" />
+            </Link>
           </div>
         )}
 
@@ -358,9 +458,12 @@ export default function AffiliateDashboardPage() {
         {/* Profile Card & Storefront Handoff */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-[#2D5A1E]">
-              Account Profile
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[#2D5A1E]">
+                Account Profile & Compliance
+              </h3>
+              {renderKycBadge(kycStatus?.status)}
+            </div>
             <div className="space-y-2 text-xs text-neutral-600">
               <div className="flex justify-between py-1.5 border-b border-neutral-100">
                 <span className="text-neutral-400">Partner Name</span>
@@ -373,6 +476,16 @@ export default function AffiliateDashboardPage() {
               <div className="flex justify-between py-1.5 border-b border-neutral-100">
                 <span className="text-neutral-400">Registered Phone</span>
                 <span className="font-semibold text-[#172B15]">{affiliate.phone || "—"}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-neutral-100">
+                <span className="text-neutral-400">KYC Status</span>
+                <Link
+                  href="/affiliate/kyc"
+                  className="font-semibold text-[#2D5A1E] hover:underline flex items-center space-x-1"
+                >
+                  <span>{kycStatus?.status || "NOT_STARTED"}</span>
+                  <ExternalLink className="w-3 h-3 text-neutral-400" />
+                </Link>
               </div>
               <div className="flex justify-between py-1.5">
                 <span className="text-neutral-400">Activation Date</span>
@@ -410,7 +523,7 @@ export default function AffiliateDashboardPage() {
 
       {/* Footer */}
       <footer className="text-center py-6 text-[10px] text-neutral-400 uppercase tracking-widest border-t border-[#2D5A1E]/10">
-        EnergyMax Cellular Health Partner Ecosystem
+        EnergyMax Ecosystem
       </footer>
     </div>
   );
