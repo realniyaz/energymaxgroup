@@ -57,6 +57,7 @@ export interface AdminAffiliateApplication {
 }
 
 export interface AdminAffiliateItem {
+  id?: number;
   public_id: string;
   full_name: string;
   email: string;
