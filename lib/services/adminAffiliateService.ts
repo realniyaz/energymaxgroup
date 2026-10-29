@@ -3,7 +3,7 @@ import { apiClient } from "@/lib/api-client";
 
 /**
  * =========================================================
- * SCHEMAS & INTERFACES
+ * SCHEMAS & INTERFACES (Aligned with Backend Models & Schemas)
  * =========================================================
  */
 
@@ -30,6 +30,16 @@ export type AdminReviewDecision =
   | "APPROVED"
   | "REJECTED"
   | "RESUBMISSION_REQUESTED";
+
+export interface AdminAffiliateProfileResponse {
+  id: string; // public_id
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  affiliate_code: string;
+  account_status: string;
+  registered_at: string;
+}
 
 export interface AdminAffiliateApplication {
   public_id: string;
@@ -121,9 +131,6 @@ export interface WithdrawalStartProcessingPayload {
   beneficiary_reference: string;
 }
 
-/**
- * KYC Admin Schemas
- */
 export interface AdminKYCDocumentItem {
   public_id: string;
   document_type: "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD";
@@ -145,8 +152,10 @@ export interface AdminKYCHistoryItem {
 }
 
 export interface AdminKYCSubmissionItem {
+  id?: number;
   public_id: string;
   affiliate_id: number;
+  affiliate?: AdminAffiliateProfileResponse | null;
   status: AdminKYCStatus;
   assigned_reviewer_id?: number | null;
   submitted_at: string;
@@ -192,7 +201,7 @@ export interface AdminKYCHistoryListResponse {
 
 /**
  * =========================================================
- * 1. APPLICATIONS DESK (/api/v1/admin/affiliate-applications)
+ * 1. APPLICATIONS DESK
  * =========================================================
  */
 
@@ -237,7 +246,7 @@ export async function rejectApplication(
 
 /**
  * =========================================================
- * 2. PARTNER DIRECTORY (/api/v1/admin/affiliates)
+ * 2. PARTNER DIRECTORY
  * =========================================================
  */
 
@@ -273,7 +282,7 @@ export async function resendActivationLink(
 
 /**
  * =========================================================
- * 3. COMMISSION POLICIES (/api/v1/admin/affiliates/commission-policies)
+ * 3. COMMISSION POLICIES
  * =========================================================
  */
 
@@ -321,7 +330,7 @@ export async function deactivateCommissionPolicy(
 
 /**
  * =========================================================
- * 4. COMMISSIONS LEDGER & MUTATIONS (/api/v1/admin/affiliates/commissions)
+ * 4. COMMISSIONS LEDGER
  * =========================================================
  */
 
@@ -400,7 +409,7 @@ export async function reverseCommission(
 
 /**
  * =========================================================
- * 5. PAYOUT SETTLEMENTS (/api/v1/admin/affiliates/withdrawals)
+ * 5. PAYOUT SETTLEMENTS
  * =========================================================
  */
 
@@ -475,7 +484,7 @@ export async function markWithdrawalPaid(
 
 /**
  * =========================================================
- * 6. ADMIN AFFILIATE KYC DESK (/api/v1/admin/affiliate-kyc)
+ * 6. ADMIN AFFILIATE KYC DESK
  * =========================================================
  */
 
@@ -565,4 +574,4 @@ export async function getAdminKYCReviewHistory(
     `/api/v1/admin/affiliate-kyc/${submissionId}/history`
   );
   return res.data;
-} 
+}

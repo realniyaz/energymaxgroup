@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Eye,
   RefreshCw,
   Search,
   ArrowRight,
@@ -18,6 +17,9 @@ import {
   FileText,
   UserCheck,
   RotateCcw,
+  Mail,
+  Phone,
+  Tag,
 } from "lucide-react";
 import {
   getAdminKYCQueueSummary,
@@ -70,15 +72,16 @@ export default function AdminAffiliateKYCDeskPage() {
 
   // Handle claiming a pending submission
   const handleClaim = async (sub: AdminKYCSubmissionItem, index: number) => {
-    // Uses database id if present, otherwise resolves numeric index
-    const numericId = (sub as any).id ?? index + 1;
+    const numericId = sub.id ?? index + 1;
     setActionLoadingId(sub.public_id);
     setError(null);
     setSuccessMsg(null);
 
     try {
       await claimAdminKYCSubmission(numericId);
-      setSuccessMsg(`Submission ${sub.public_id.slice(0, 8)}... successfully claimed into review.`);
+      setSuccessMsg(
+        `Submission ${sub.public_id.slice(0, 8)}... successfully claimed into review.`
+      );
       await loadData();
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
@@ -92,7 +95,7 @@ export default function AdminAffiliateKYCDeskPage() {
     }
   };
 
-  // Search filter across public_id, affiliate_id, and assigned reviewer
+  // Search filter across partner name, email, code, public_id, and affiliate_id
   const filteredSubmissions = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return submissions;
@@ -103,11 +106,19 @@ export default function AdminAffiliateKYCDeskPage() {
       const reviewerId = String(s.assigned_reviewer_id || "");
       const status = (s.status || "").toLowerCase();
 
+      // Profile Search
+      const name = (s.affiliate?.full_name || "").toLowerCase();
+      const email = (s.affiliate?.email || "").toLowerCase();
+      const code = (s.affiliate?.affiliate_code || "").toLowerCase();
+
       return (
         uuid.includes(q) ||
         affiliateId.includes(q) ||
         reviewerId.includes(q) ||
-        status.includes(q)
+        status.includes(q) ||
+        name.includes(q) ||
+        email.includes(q) ||
+        code.includes(q)
       );
     });
   }, [submissions, search]);
@@ -269,7 +280,7 @@ export default function AdminAffiliateKYCDeskPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by affiliate ID, UUID, or reviewer..."
+            placeholder="Search by partner name, email, code, UUID..."
             className="w-full pl-10 pr-4 py-2 rounded-xl bg-[#FAFAF7] border border-[#2D5A1E]/15 text-xs text-[#172B15] placeholder-neutral-400 focus:outline-none focus:border-[#639E1F]"
           />
         </div>
@@ -320,7 +331,7 @@ export default function AdminAffiliateKYCDeskPage() {
               <thead className="bg-[#FAFAF7] border-b border-neutral-100 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
                 <tr>
                   <th className="px-6 py-4">Submission UUID</th>
-                  <th className="px-6 py-4">Affiliate Partner</th>
+                  <th className="px-6 py-4">Affiliate Partner Profile</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Assigned Auditor</th>
                   <th className="px-6 py-4">Submitted Date</th>
@@ -328,15 +339,16 @@ export default function AdminAffiliateKYCDeskPage() {
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100 font-mono">
+              <tbody className="divide-y divide-neutral-100">
                 {filteredSubmissions.map((sub, index) => {
-                  const numericId = (sub as any).id ?? index + 1;
+                  const numericId = sub.id ?? index + 1;
+                  const profile = sub.affiliate;
 
                   return (
                     <tr key={sub.public_id} className="hover:bg-[#FAFAF7]/70">
                       {/* Submission UUID */}
                       <td className="px-6 py-4">
-                        <div className="font-bold text-[#172B15] flex items-center space-x-1.5">
+                        <div className="font-bold text-[#172B15] font-mono flex items-center space-x-1.5">
                           <span>{sub.public_id.slice(0, 8)}...</span>
                         </div>
                         <div className="text-[10px] text-neutral-400 font-mono">
@@ -344,15 +356,36 @@ export default function AdminAffiliateKYCDeskPage() {
                         </div>
                       </td>
 
-                      {/* Partner Identifier */}
-                      <td className="px-6 py-4 font-sans">
-                        <span className="font-bold text-[#2D5A1E] bg-[#8CC63F]/15 px-2.5 py-0.5 rounded-full border border-[#8CC63F]/30 text-xs">
-                          Affiliate #{sub.affiliate_id}
-                        </span>
+                      {/* Partner Profile Details */}
+                      <td className="px-6 py-4">
+                        {profile ? (
+                          <div className="space-y-1">
+                            <div className="font-bold text-[#172B15] flex items-center space-x-2">
+                              <span>{profile.full_name}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#8CC63F]/20 text-[#2D5A1E] font-bold border border-[#8CC63F]/40">
+                                {profile.affiliate_code}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-neutral-500 font-mono flex items-center space-x-1">
+                              <Mail className="w-3 h-3 text-neutral-400" />
+                              <span>{profile.email}</span>
+                            </div>
+                            {profile.phone && (
+                              <div className="text-[10px] text-neutral-400 flex items-center space-x-1">
+                                <Phone className="w-3 h-3 text-neutral-400" />
+                                <span>{profile.phone}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="font-bold text-[#2D5A1E] bg-[#8CC63F]/15 px-2.5 py-0.5 rounded-full border border-[#8CC63F]/30 text-xs">
+                            Affiliate #{sub.affiliate_id}
+                          </span>
+                        )}
                       </td>
 
                       {/* Status */}
-                      <td className="px-6 py-4 font-sans">
+                      <td className="px-6 py-4">
                         {renderStatusBadge(sub.status)}
                         {sub.decision_reason && (
                           <div className="text-[10px] text-neutral-400 max-w-[160px] truncate mt-1">
@@ -362,7 +395,7 @@ export default function AdminAffiliateKYCDeskPage() {
                       </td>
 
                       {/* Reviewer */}
-                      <td className="px-6 py-4 font-sans text-xs">
+                      <td className="px-6 py-4 text-xs">
                         {sub.assigned_reviewer_id ? (
                           <span className="inline-flex items-center space-x-1 text-neutral-700 font-semibold">
                             <UserCheck className="w-3.5 h-3.5 text-[#2D5A1E]" />
@@ -385,7 +418,7 @@ export default function AdminAffiliateKYCDeskPage() {
                       </td>
 
                       {/* Documents breakdown */}
-                      <td className="px-6 py-4 font-sans">
+                      <td className="px-6 py-4">
                         <div className="flex items-center space-x-1 text-[11px] font-semibold text-neutral-700">
                           <FileText className="w-3.5 h-3.5 text-[#2D5A1E]" />
                           <span>{sub.documents?.length || 0} Files</span>
@@ -394,7 +427,7 @@ export default function AdminAffiliateKYCDeskPage() {
                           {sub.documents?.map((d) => (
                             <span
                               key={d.public_id}
-                              className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-neutral-100 text-neutral-600 border border-neutral-200"
+                              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 border border-neutral-200"
                             >
                               {d.document_type.replace("_", " ")}
                             </span>
@@ -403,7 +436,7 @@ export default function AdminAffiliateKYCDeskPage() {
                       </td>
 
                       {/* Row Actions */}
-                      <td className="px-6 py-4 text-right font-sans space-x-2">
+                      <td className="px-6 py-4 text-right space-x-2">
                         {sub.status === "PENDING_REVIEW" && (
                           <button
                             onClick={() => handleClaim(sub, index)}

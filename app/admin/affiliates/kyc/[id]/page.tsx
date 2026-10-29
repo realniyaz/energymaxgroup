@@ -17,12 +17,15 @@ import {
   AlertCircle,
   Loader2,
   X,
-  ExternalLink,
   ShieldCheck,
   Sliders,
   ZoomIn,
   ZoomOut,
   RotateCw,
+  Mail,
+  Phone,
+  Tag,
+  Calendar,
 } from "lucide-react";
 import {
   getAdminKYCSubmission,
@@ -63,10 +66,11 @@ export default function AdminKYCInspectionPage({
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewRotation, setPreviewRotation] = useState(0);
 
-  // Decisions & Status Modals
+  // Decision Modal State
   const [decisionModal, setDecisionModal] = useState<AdminReviewDecision | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
 
+  // Direct Status Override Modal State
   const [isManualStatusModalOpen, setIsManualStatusModalOpen] = useState(false);
   const [targetStatus, setTargetStatus] = useState<AdminKYCStatus>("VERIFIED");
   const [statusReason, setStatusReason] = useState("");
@@ -89,10 +93,10 @@ export default function AdminKYCInspectionPage({
         } else if (/^\d+$/.test(routeParam)) {
           numericId = parseInt(routeParam, 10);
         } else {
-          // Fallback: match UUID in list to find numeric ID
+          // Fallback: lookup UUID from queue to find numeric id
           const listRes = await getAdminKYCSubmissions(null, 100, 0);
           const found = listRes.items.find((item) => item.public_id === routeParam);
-          numericId = (found as any)?.id ?? 1;
+          numericId = found?.id ?? 1;
         }
 
         setResolvedNumericId(numericId);
@@ -121,46 +125,41 @@ export default function AdminKYCInspectionPage({
   };
 
   // 2. Fetch and open document in interactive viewer
-const handleViewDocument = async (
-  docType: "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD",
-  filename: string
-) => {
-  if (!resolvedNumericId) return;
+  const handleViewDocument = async (
+    docType: "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD",
+    filename: string
+  ) => {
+    if (!resolvedNumericId) return;
+    const cleanDocType = docType.trim().toUpperCase() as
+      | "AADHAAR_FRONT"
+      | "AADHAAR_BACK"
+      | "PAN_CARD";
 
-  // Ensure exact uppercase without whitespace
-  const cleanDocType = docType.trim().toUpperCase() as
-    | "AADHAAR_FRONT"
-    | "AADHAAR_BACK"
-    | "PAN_CARD";
+    setPreviewLoading(cleanDocType);
+    setErrorMsg(null);
+    try {
+      const blob = await downloadAdminKYCDocument(resolvedNumericId, cleanDocType);
+      const isPdf =
+        blob.type === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
+      const url = window.URL.createObjectURL(blob);
 
-  setPreviewLoading(cleanDocType);
-  setErrorMsg(null);
-
-  try {
-    const blob = await downloadAdminKYCDocument(resolvedNumericId, cleanDocType);
-    const isPdf =
-      blob.type === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
-    const url = window.URL.createObjectURL(blob);
-
-    setPreviewZoom(1);
-    setPreviewRotation(0);
-    setPreviewDoc({
-      url,
-      type: isPdf ? "pdf" : "image",
-      title: cleanDocType.replace("_", " "),
-      filename,
-    });
-  } catch (err: any) {
-    const detail = err?.response?.data?.detail;
-    const msg =
-      typeof detail === "string"
-        ? detail
-        : "Failed to load document preview from private storage.";
-    setErrorMsg(msg);
-  } finally {
-    setPreviewLoading(null);
-  }
-};
+      setPreviewZoom(1);
+      setPreviewRotation(0);
+      setPreviewDoc({
+        url,
+        type: isPdf ? "pdf" : "image",
+        title: cleanDocType.replace("_", " "),
+        filename,
+      });
+    } catch (err: any) {
+      setErrorMsg(
+        err?.response?.data?.detail ||
+          "Failed to load document preview. File may be missing or unverified."
+      );
+    } finally {
+      setPreviewLoading(null);
+    }
+  };
 
   const closePreview = () => {
     if (previewDoc?.url) {
@@ -175,8 +174,13 @@ const handleViewDocument = async (
     filename: string
   ) => {
     if (!resolvedNumericId) return;
+    const cleanDocType = docType.trim().toUpperCase() as
+      | "AADHAAR_FRONT"
+      | "AADHAAR_BACK"
+      | "PAN_CARD";
+
     try {
-      const blob = await downloadAdminKYCDocument(resolvedNumericId, docType);
+      const blob = await downloadAdminKYCDocument(resolvedNumericId, cleanDocType);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -223,7 +227,6 @@ const handleViewDocument = async (
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    // Map KYCStatus to standard review decisions where applicable
     let mappedDecision: AdminReviewDecision = "APPROVED";
     if (targetStatus === "REJECTED") mappedDecision = "REJECTED";
     if (targetStatus === "RESUBMISSION_REQUIRED") mappedDecision = "RESUBMISSION_REQUESTED";
@@ -278,6 +281,8 @@ const handleViewDocument = async (
     );
   }
 
+  const profile = submission.affiliate;
+
   return (
     <div className="p-6 sm:p-10 space-y-8 bg-[#FAFAF7] min-h-screen font-sans text-[#172B15] max-w-6xl mx-auto">
       {/* Navigation & Action Bar */}
@@ -291,7 +296,6 @@ const handleViewDocument = async (
         </Link>
 
         <div className="flex items-center space-x-2">
-          {/* Status Override Button */}
           <button
             onClick={() => setIsManualStatusModalOpen(true)}
             className="px-3.5 py-2 rounded-xl bg-white border border-[#2D5A1E]/20 text-[#172B15] hover:bg-[#FAFAF7] text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 shadow-xs cursor-pointer"
@@ -300,7 +304,6 @@ const handleViewDocument = async (
             <span>Update Status</span>
           </button>
 
-          {/* Reassign Reviewer Button */}
           <button
             onClick={() => setIsReassignOpen(true)}
             className="px-3.5 py-2 rounded-xl bg-white border border-[#2D5A1E]/20 text-[#172B15] hover:bg-[#FAFAF7] text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 shadow-xs cursor-pointer"
@@ -326,7 +329,7 @@ const handleViewDocument = async (
         </div>
       )}
 
-      {/* Dossier Header Card */}
+      {/* Main Dossier Card */}
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#2D5A1E]/15 space-y-6 shadow-xs">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -337,10 +340,6 @@ const handleViewDocument = async (
               {submission.public_id}
             </h2>
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500 mt-2 font-sans">
-              <span className="font-semibold text-[#2D5A1E]">
-                Affiliate Partner #{submission.affiliate_id}
-              </span>
-              <span>•</span>
               <span>
                 Assigned Auditor:{" "}
                 <strong className="text-neutral-700">
@@ -355,16 +354,69 @@ const handleViewDocument = async (
           </div>
 
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-neutral-100 border border-neutral-200">
+            <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-neutral-100 border border-neutral-200 font-mono">
               {submission.status}
             </span>
           </div>
         </div>
 
+        {/* Affiliate Partner Detailed Profile Box */}
+        {profile && (
+          <div className="p-5 rounded-2xl bg-[#FAFAF7] border border-[#2D5A1E]/15 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 block">
+                Partner Identity
+              </span>
+              <div className="font-bold text-[#172B15] text-sm mt-0.5">
+                {profile.full_name}
+              </div>
+              <div className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                UUID: {profile.id}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 block">
+                Contact & Referral Code
+              </span>
+              <div className="text-xs text-neutral-600 flex items-center space-x-1.5 mt-0.5">
+                <Mail className="w-3.5 h-3.5 text-neutral-400" />
+                <span>{profile.email}</span>
+              </div>
+              {profile.phone && (
+                <div className="text-xs text-neutral-600 flex items-center space-x-1.5 mt-0.5">
+                  <Phone className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>{profile.phone}</span>
+                </div>
+              )}
+              <div className="mt-1 flex items-center space-x-1.5">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#8CC63F]/20 text-[#2D5A1E] font-bold border border-[#8CC63F]/40">
+                  Code: {profile.affiliate_code}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 block">
+                Account Status & Date
+              </span>
+              <div className="flex items-center space-x-2 mt-1">
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  {profile.account_status}
+                </span>
+              </div>
+              <div className="text-[10px] text-neutral-400 flex items-center space-x-1 mt-1">
+                <Calendar className="w-3 h-3 text-neutral-400" />
+                <span>Joined {new Date(profile.registered_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {submission.decision_reason && (
           <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-neutral-200 text-xs text-neutral-700 space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
-              Active Reason / Notes
+              Active Compliance Reason
             </span>
             <p>{submission.decision_reason}</p>
           </div>
@@ -399,7 +451,7 @@ const handleViewDocument = async (
         </div>
       </div>
 
-      {/* Submitted Documents Grid with View & Download */}
+      {/* Submitted Documents Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-500">
@@ -430,7 +482,10 @@ const handleViewDocument = async (
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-neutral-400 truncate" title={doc.original_filename}>
+                  <p
+                    className="text-[11px] text-neutral-400 truncate"
+                    title={doc.original_filename}
+                  >
                     {doc.original_filename}
                   </p>
                 </div>
@@ -464,7 +519,7 @@ const handleViewDocument = async (
         </div>
       </div>
 
-      {/* Review History Audit Trail */}
+      {/* Audit History Logs */}
       <div className="bg-white rounded-3xl border border-[#2D5A1E]/15 overflow-hidden shadow-xs">
         <div className="p-5 border-b border-neutral-100 flex items-center space-x-2">
           <History className="w-4 h-4 text-[#2D5A1E]" />
@@ -479,7 +534,10 @@ const handleViewDocument = async (
             </div>
           ) : (
             submission.review_history.map((h) => (
-              <div key={h.public_id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div
+                key={h.public_id}
+                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+              >
                 <div className="space-y-0.5">
                   <div className="flex items-center space-x-2 font-bold text-[#172B15]">
                     <span>{h.action}</span>
@@ -501,11 +559,10 @@ const handleViewDocument = async (
       </div>
 
       {/* ======================================================== */}
-      {/* 1. DOCUMENT VIEWER MODAL (Images + PDF) */}
+      {/* 1. DOCUMENT VIEWER MODAL */}
       {/* ======================================================== */}
       {previewDoc && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col p-4 sm:p-6 animate-in fade-in duration-200">
-          {/* Modal Header */}
           <div className="flex items-center justify-between bg-[#172B15] text-white px-6 py-3 rounded-2xl mb-3 shadow-lg">
             <div className="flex items-center space-x-3">
               <span className="text-xs font-bold uppercase tracking-wider text-[#8CC63F]">
@@ -563,7 +620,6 @@ const handleViewDocument = async (
             </div>
           </div>
 
-          {/* Modal Content Body */}
           <div className="flex-1 bg-neutral-900 rounded-3xl overflow-hidden flex items-center justify-center p-2 relative">
             {previewDoc.type === "pdf" ? (
               <iframe
@@ -704,7 +760,7 @@ const handleViewDocument = async (
       {/* ======================================================== */}
       {isReassignOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white max-w-md w-full rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl border border-neutral-200">
+          <div className="bg-white max-w-md w-full rounded-3xl p-6 space-y-4 shadow-2xl border border-neutral-200">
             <h3 className="text-base font-bold uppercase tracking-wider text-[#172B15]">
               Reassign KYC Auditor
             </h3>
