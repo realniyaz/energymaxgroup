@@ -150,7 +150,7 @@ export interface WithdrawalCreatePayload {
 
 /**
  * =========================================================
- * KYC INTERFACES (Manual & Automated Secure ID)
+ * KYC INTERFACES (Manual, Cashfree & DigiLocker)
  * =========================================================
  */
 
@@ -245,6 +245,44 @@ export interface ManualKYCSubmissionResponse {
   decision_reason?: string | null;
   documents: KYCDocumentMeta[];
   review_history: any[];
+}
+
+export interface DigiLockerInitiatePayload {
+  redirect_url: string;
+  user_flow?: "signin" | "signup";
+}
+
+export interface DigiLockerInitiateResponse {
+  verification_id: string;
+  reference_id?: string;
+  url: string;
+  status: string;
+  expires_in_seconds?: number;
+}
+
+export interface DigiLockerStatusResponse {
+  verification_id: string;
+  reference_id?: string;
+  status:
+    | "initiated"
+    | "pending"
+    | "AUTHENTICATED"
+    | "COMPLETED"
+    | "SUCCESS"
+    | "FAILED"
+    | "EXPIRED"
+    | string;
+  document_requested?: string[];
+  document_status?: Record<string, string>;
+  message?: string;
+}
+
+export interface DigiLockerDocumentResponse {
+  verification_id: string;
+  document_type: string;
+  status: string;
+  data?: Record<string, any>;
+  message?: string;
 }
 
 /**
@@ -407,10 +445,7 @@ export async function requestAffiliateWithdrawal(
   return res.data;
 }
 
-// =========================================================
-// KYC OPERATIONS (Automated Cashfree & Manual)
-// =========================================================
-
+// Direct Provider KYC Operations
 export async function verifyAffiliatePAN(
   payload: PANVerificationPayload
 ): Promise<PANVerificationResponse> {
@@ -441,6 +476,7 @@ export async function verifyAffiliateAadhaarOTP(
   return res.data;
 }
 
+// Manual Dossier KYC Operations
 export async function getManualKYCStatus(): Promise<ManualKYCStatusResponse> {
   const res = await affiliateClient.get<ManualKYCStatusResponse>(
     "/api/v1/affiliate/kyc/manual/status"
@@ -473,6 +509,35 @@ export async function submitManualKYC(
         "Content-Type": "multipart/form-data",
       },
     }
+  );
+  return res.data;
+}
+
+// DigiLocker Automated KYC Operations
+export async function initiateDigiLockerKYC(
+  payload: DigiLockerInitiatePayload
+): Promise<DigiLockerInitiateResponse> {
+  const res = await affiliateClient.post<DigiLockerInitiateResponse>(
+    "/api/v1/affiliate/kyc/digilocker/initiate",
+    payload
+  );
+  return res.data;
+}
+
+export async function getDigiLockerKYCStatus(
+  verificationId: string
+): Promise<DigiLockerStatusResponse> {
+  const res = await affiliateClient.get<DigiLockerStatusResponse>(
+    `/api/v1/affiliate/kyc/digilocker/status/${verificationId}`
+  );
+  return res.data;
+}
+
+export async function getDigiLockerKYCDocument(
+  verificationId: string
+): Promise<DigiLockerDocumentResponse> {
+  const res = await affiliateClient.get<DigiLockerDocumentResponse>(
+    `/api/v1/affiliate/kyc/digilocker/document/${verificationId}`
   );
   return res.data;
 }

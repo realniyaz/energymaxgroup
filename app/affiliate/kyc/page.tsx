@@ -17,6 +17,8 @@ import {
   Loader2,
   KeyRound,
   FileCheck2,
+  ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { useAffiliateAuth } from "@/context/affiliate-auth-context";
 import {
@@ -26,6 +28,7 @@ import {
   verifyAffiliatePAN,
   generateAffiliateAadhaarOTP,
   verifyAffiliateAadhaarOTP,
+  initiateDigiLockerKYC,
   ManualKYCStatusResponse,
   ManualKYCDocumentsResponse,
   KYCStatus,
@@ -39,6 +42,10 @@ export default function AffiliateKYCPage() {
   const [kycStatus, setKycStatus] = useState<ManualKYCStatusResponse | null>(null);
   const [kycDocs, setKycDocs] = useState<ManualKYCDocumentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // DigiLocker State
+  const [digiLoading, setDigiLoading] = useState(false);
+  const [digiError, setDigiError] = useState<string | null>(null);
 
   // Instant PAN state
   const [panNumber, setPanNumber] = useState("");
@@ -80,7 +87,7 @@ export default function AffiliateKYCPage() {
         setActiveTab("manual");
       }
     } catch {
-      // Ignored: defaults to clean initial form
+      // Ignored
     } finally {
       setLoading(false);
     }
@@ -91,6 +98,35 @@ export default function AffiliateKYCPage() {
       loadStatus();
     }
   }, [affiliate]);
+
+  // Handle DigiLocker Initiation
+  const handleInitiateDigiLocker = async () => {
+    setDigiLoading(true);
+    setDigiError(null);
+    try {
+      const callbackUrl = `${window.location.origin}/affiliate/kyc/digilocker/callback`;
+      const res = await initiateDigiLockerKYC({
+        redirect_url: callbackUrl,
+        user_flow: "signin",
+      });
+
+      if (res.verification_id) {
+        localStorage.setItem("digilocker_verification_id", res.verification_id);
+      }
+
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        setDigiError("DigiLocker provider did not return a redirection link.");
+      }
+    } catch (err: any) {
+      setDigiError(
+        err?.response?.data?.detail || "Failed to initialize automated DigiLocker session."
+      );
+    } finally {
+      setDigiLoading(false);
+    }
+  };
 
   const handlePanVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +166,7 @@ export default function AffiliateKYCPage() {
     } catch (err: any) {
       setAadhaarResult({
         verified: false,
-        message: err.response?.data?.detail || "Failed to generate Aadhaar OTP.",
+        message: err.response?.data?.detail || "Failed to generate OTP.",
       });
     } finally {
       setAadhaarLoading(false);
@@ -177,7 +213,7 @@ export default function AffiliateKYCPage() {
       await submitManualKYC(frontFile, backFile, panFile);
       setManualMessage({
         type: "success",
-        text: "Documents submitted successfully for administrative compliance review.",
+        text: "Documents submitted successfully for compliance review.",
       });
       setFrontFile(null);
       setBackFile(null);
@@ -186,7 +222,9 @@ export default function AffiliateKYCPage() {
     } catch (err: any) {
       setManualMessage({
         type: "error",
-        text: err.response?.data?.detail || "Submission failed. Please verify file sizes (max 5 MB) and formats (PDF/JPEG/PNG).",
+        text:
+          err.response?.data?.detail ||
+          "Submission failed. Please verify file sizes (max 5 MB) and formats (PDF/JPEG/PNG).",
       });
     } finally {
       setUploadLoading(false);
@@ -300,7 +338,7 @@ export default function AffiliateKYCPage() {
                 : "text-neutral-500 hover:text-[#172B15] hover:bg-neutral-100"
             }`}
           >
-            Instant Online KYC (Cashfree)
+            Instant Online KYC (DigiLocker & Cashfree)
           </button>
           <button
             onClick={() => setActiveTab("manual")}
@@ -314,19 +352,64 @@ export default function AffiliateKYCPage() {
           </button>
         </div>
 
-        {/* TAB 1: Instant Verification */}
+        {/* TAB 1: Instant Automated Verification */}
         {activeTab === "instant" && (
           <div className="space-y-8">
-            {/* PAN Verification */}
+            {/* 1. Automated DigiLocker Card */}
+            <div className="bg-gradient-to-br from-[#172B15] via-[#234717] to-[#2D5A1E] text-white p-6 sm:p-8 rounded-3xl shadow-md space-y-5 relative overflow-hidden">
+              <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#8CC63F]/15 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#8CC63F]/20 text-[#8CC63F] text-[10px] font-bold uppercase tracking-widest border border-[#8CC63F]/30">
+                    <Sparkles className="w-3 h-3 text-[#8CC63F]" />
+                    <span>Fastest & Fully Automated</span>
+                  </div>
+                  <h3 className="text-xl font-serif font-bold text-white">
+                    One-Click DigiLocker Verification
+                  </h3>
+                  <p className="text-xs text-neutral-300 max-w-lg leading-relaxed">
+                    Instantly verify your official Government of India identity documents via your DigiLocker account. Instant approval with zero file uploads required.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleInitiateDigiLocker}
+                  disabled={digiLoading}
+                  className="px-6 py-3.5 rounded-2xl bg-[#8CC63F] text-[#172B15] font-bold text-xs uppercase tracking-wider hover:bg-[#7db435] transition-all flex items-center justify-center space-x-2 shrink-0 cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {digiLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-[#172B15]" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Verify with DigiLocker</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {digiError && (
+                <div className="relative z-10 p-3 rounded-xl bg-rose-900/40 border border-rose-700/50 text-rose-200 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-300" />
+                  <span>{digiError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* 2. PAN Verification */}
             <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-4">
               <div className="flex items-center space-x-2 text-[#2D5A1E]">
                 <ShieldCheck className="w-5 h-5" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-[#172B15]">
-                  1. PAN Verification
+                  Instant PAN Verification
                 </h2>
               </div>
               <p className="text-xs text-neutral-400">
-                Instantly validates your Permanent Account Number against government databases.
+                Validates your Permanent Account Number against government databases.
               </p>
 
               {panResult && (
@@ -388,16 +471,16 @@ export default function AffiliateKYCPage() {
               </form>
             </div>
 
-            {/* Aadhaar OTP */}
+            {/* 3. Paperless Offline OTP Verification */}
             <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#2D5A1E]/15 shadow-xs space-y-4">
               <div className="flex items-center space-x-2 text-[#2D5A1E]">
                 <KeyRound className="w-5 h-5" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-[#172B15]">
-                  2. Aadhaar Paperless Offline Verification
+                  Paperless Offline OTP Verification
                 </h2>
               </div>
               <p className="text-xs text-neutral-400">
-                Receive a one-time security OTP sent directly to your UIDAI registered mobile number.
+                Receive an authentication OTP sent to your UIDAI registered mobile number.
               </p>
 
               {aadhaarResult && (
@@ -417,7 +500,7 @@ export default function AffiliateKYCPage() {
                 <form onSubmit={handleSendAadhaarOTP} className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
-                      12-Digit Aadhaar Number
+                      12-Digit Identification Number
                     </label>
                     <input
                       type="text"
@@ -442,7 +525,7 @@ export default function AffiliateKYCPage() {
                 <form onSubmit={handleVerifyAadhaarOTP} className="space-y-4">
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
-                      6-Digit OTP Code
+                      6-Digit Security OTP
                     </label>
                     <input
                       type="text"
@@ -466,9 +549,9 @@ export default function AffiliateKYCPage() {
                     <button
                       type="button"
                       onClick={() => setOtpStep("input")}
-                      className="px-4 py-2.5 text-xs text-neutral-500 hover:text-neutral-700"
+                      className="px-4 py-2.5 text-xs text-neutral-500 hover:text-neutral-700 cursor-pointer"
                     >
-                      Change Aadhaar Number
+                      Change Number
                     </button>
                   </div>
                 </form>
@@ -506,7 +589,6 @@ export default function AffiliateKYCPage() {
               </div>
             )}
 
-            {/* Current Uploaded Documents Status */}
             {kycDocs && kycDocs.documents.length > 0 && (
               <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-neutral-200 space-y-3">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 block">
@@ -531,10 +613,9 @@ export default function AffiliateKYCPage() {
 
             <form onSubmit={handleManualSubmit} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Aadhaar Front */}
                 <div className="border border-dashed border-neutral-300 rounded-2xl p-5 text-center space-y-2 hover:border-[#639E1F] transition-all">
                   <UploadCloud className="w-6 h-6 text-neutral-400 mx-auto" />
-                  <span className="text-xs font-bold block text-[#172B15]">Aadhaar Front</span>
+                  <span className="text-xs font-bold block text-[#172B15]">ID Front</span>
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png"
@@ -545,10 +626,9 @@ export default function AffiliateKYCPage() {
                   {frontFile && <p className="text-[9px] text-[#639E1F] font-mono truncate">{frontFile.name}</p>}
                 </div>
 
-                {/* Aadhaar Back */}
                 <div className="border border-dashed border-neutral-300 rounded-2xl p-5 text-center space-y-2 hover:border-[#639E1F] transition-all">
                   <UploadCloud className="w-6 h-6 text-neutral-400 mx-auto" />
-                  <span className="text-xs font-bold block text-[#172B15]">Aadhaar Back</span>
+                  <span className="text-xs font-bold block text-[#172B15]">ID Back</span>
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png"
@@ -559,7 +639,6 @@ export default function AffiliateKYCPage() {
                   {backFile && <p className="text-[9px] text-[#639E1F] font-mono truncate">{backFile.name}</p>}
                 </div>
 
-                {/* PAN Card */}
                 <div className="border border-dashed border-neutral-300 rounded-2xl p-5 text-center space-y-2 hover:border-[#639E1F] transition-all">
                   <UploadCloud className="w-6 h-6 text-neutral-400 mx-auto" />
                   <span className="text-xs font-bold block text-[#172B15]">PAN Card</span>

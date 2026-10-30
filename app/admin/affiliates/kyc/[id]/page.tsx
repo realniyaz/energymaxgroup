@@ -26,6 +26,8 @@ import {
   Phone,
   Tag,
   Calendar,
+  Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import {
   getAdminKYCSubmission,
@@ -50,8 +52,8 @@ export default function AdminKYCInspectionPage({
 
   const [resolvedNumericId, setResolvedNumericId] = useState<number | null>(null);
   const [submission, setSubmission] = useState<AdminKYCSubmissionItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -63,24 +65,24 @@ export default function AdminKYCInspectionPage({
     filename: string;
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
-  const [previewZoom, setPreviewZoom] = useState(1);
-  const [previewRotation, setPreviewRotation] = useState(0);
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
+  const [previewRotation, setPreviewRotation] = useState<number>(0);
 
   // Decision Modal State
   const [decisionModal, setDecisionModal] = useState<AdminReviewDecision | null>(null);
-  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionReason, setDecisionReason] = useState<string>("");
 
   // Direct Status Override Modal State
-  const [isManualStatusModalOpen, setIsManualStatusModalOpen] = useState(false);
+  const [isManualStatusModalOpen, setIsManualStatusModalOpen] = useState<boolean>(false);
   const [targetStatus, setTargetStatus] = useState<AdminKYCStatus>("VERIFIED");
-  const [statusReason, setStatusReason] = useState("");
+  const [statusReason, setStatusReason] = useState<string>("");
 
   // Reassignment Modal State
-  const [isReassignOpen, setIsReassignOpen] = useState(false);
-  const [targetReviewerId, setTargetReviewerId] = useState("");
-  const [reassignReason, setReassignReason] = useState("");
+  const [isReassignOpen, setIsReassignOpen] = useState<boolean>(false);
+  const [targetReviewerId, setTargetReviewerId] = useState<string>("");
+  const [reassignReason, setReassignReason] = useState<string>("");
 
-  // 1. Resolve numeric ID and load details
+  // 1. Resolve numeric ID and fetch submission dossier
   useEffect(() => {
     async function resolveAndFetch() {
       setLoading(true);
@@ -93,7 +95,7 @@ export default function AdminKYCInspectionPage({
         } else if (/^\d+$/.test(routeParam)) {
           numericId = parseInt(routeParam, 10);
         } else {
-          // Fallback: lookup UUID from queue to find numeric id
+          // Lookup UUID from queue list to extract numeric PK
           const listRes = await getAdminKYCSubmissions(null, 100, 0);
           const found = listRes.items.find((item) => item.public_id === routeParam);
           numericId = found?.id ?? 1;
@@ -120,11 +122,11 @@ export default function AdminKYCInspectionPage({
       const data = await getAdminKYCSubmission(resolvedNumericId);
       setSubmission(data);
     } catch {
-      // Ignored
+      // Refresh silently
     }
   };
 
-  // 2. Fetch and open document in interactive viewer
+  // 2. Fetch and open document in interactive lightbox
   const handleViewDocument = async (
     docType: "AADHAAR_FRONT" | "AADHAAR_BACK" | "PAN_CARD",
     filename: string
@@ -282,6 +284,7 @@ export default function AdminKYCInspectionPage({
   }
 
   const profile = submission.affiliate;
+  const digiLocker = (submission as any).digilocker_verification;
 
   return (
     <div className="p-6 sm:p-10 space-y-8 bg-[#FAFAF7] min-h-screen font-sans text-[#172B15] max-w-6xl mx-auto">
@@ -333,9 +336,18 @@ export default function AdminKYCInspectionPage({
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#2D5A1E]/15 space-y-6 shadow-xs">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#639E1F] block">
-              KYC Compliance Dossier
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#639E1F] block">
+                KYC Compliance Dossier
+              </span>
+              {digiLocker && (
+                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold uppercase border border-emerald-300">
+                  <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                  <span>DigiLocker Linked</span>
+                </span>
+              )}
+            </div>
+
             <h2 className="text-xl sm:text-2xl font-mono font-bold text-[#172B15] mt-0.5">
               {submission.public_id}
             </h2>
@@ -354,7 +366,7 @@ export default function AdminKYCInspectionPage({
           </div>
 
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-neutral-100 border border-neutral-200 font-mono">
+            <span className="text-xs font-bold uppercase px-3.5 py-1 rounded-full bg-neutral-100 border border-neutral-200 font-mono">
               {submission.status}
             </span>
           </div>
@@ -410,6 +422,24 @@ export default function AdminKYCInspectionPage({
                 <span>Joined {new Date(profile.registered_at).toLocaleDateString()}</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* DigiLocker Automated Session Info (If Active) */}
+        {digiLocker && (
+          <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono">
+            <div>
+              <span className="font-bold block text-[11px] text-emerald-800">
+                DigiLocker Verification Verification ID: {digiLocker.verification_id}
+              </span>
+              <span className="text-[10px] text-emerald-700">
+                Provider Reference: {digiLocker.provider_reference_id || "Direct"} • Document:{" "}
+                {digiLocker.document_type || "AADHAAR"}
+              </span>
+            </div>
+            <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 self-start sm:self-auto">
+              Status: {digiLocker.status}
+            </span>
           </div>
         )}
 
@@ -579,21 +609,21 @@ export default function AdminKYCInspectionPage({
                 <>
                   <button
                     onClick={() => setPreviewZoom((z) => Math.max(0.5, z - 0.25))}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
                     title="Zoom Out"
                   >
                     <ZoomOut className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setPreviewZoom((z) => Math.min(3, z + 0.25))}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
                     title="Zoom In"
                   >
                     <ZoomIn className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setPreviewRotation((r) => (r + 90) % 360)}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
                     title="Rotate 90deg"
                   >
                     <RotateCw className="w-4 h-4" />
@@ -669,14 +699,14 @@ export default function AdminKYCInspectionPage({
                 <button
                   type="button"
                   onClick={() => setDecisionModal(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-neutral-100 text-xs font-bold uppercase text-neutral-600 hover:bg-neutral-200"
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-100 text-xs font-bold uppercase text-neutral-600 hover:bg-neutral-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? "Submitting..." : "Confirm Decision"}
                 </button>
@@ -738,14 +768,14 @@ export default function AdminKYCInspectionPage({
                 <button
                   type="button"
                   onClick={() => setIsManualStatusModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-neutral-100 text-xs font-bold uppercase text-neutral-600 hover:bg-neutral-200"
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-100 text-xs font-bold uppercase text-neutral-600 hover:bg-neutral-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? "Updating..." : "Update Status"}
                 </button>
@@ -795,14 +825,14 @@ export default function AdminKYCInspectionPage({
                 <button
                   type="button"
                   onClick={() => setIsReassignOpen(false)}
-                  className="flex-1 py-2 rounded-xl bg-neutral-100 text-xs font-bold uppercase text-neutral-600"
+                  className="flex-1 py-2 rounded-xl bg-neutral-100 text-xs font-bold uppercase text-neutral-600 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="flex-1 py-2 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] disabled:opacity-50"
+                  className="flex-1 py-2 rounded-xl bg-[#172B15] text-white text-xs font-bold uppercase hover:bg-[#2D5A1E] disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? "Reassigning..." : "Reassign"}
                 </button>
